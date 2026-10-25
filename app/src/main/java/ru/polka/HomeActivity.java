@@ -24,7 +24,35 @@ public class HomeActivity extends Activity {
     private static final Locale RU = new Locale("ru");
     private TextView time, date, battery;
     private LinearLayout reading, tiles;
-    private TextView light, disk;
+    private TextView light, disk, wifi;
+
+    private final BroadcastReceiver netChange = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { updateWifi(); }
+    };
+
+    private void toggleWifi() {
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm == null) return;
+            boolean on = wm.isWifiEnabled();
+            wm.setWifiEnabled(!on);
+            wifi.setText(on ? "Wi-Fi: выкл" : "Wi-Fi: включаю…");
+        } catch (Throwable e) {
+            Crash.note(this, "wifi toggle", e);
+            AppsActivity.openSystemSettings(this);
+        }
+    }
+
+    private void updateWifi() {
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            boolean enabled = wm != null && wm.isWifiEnabled();
+            if (!enabled) { wifi.setText("Wi-Fi: выкл"); return; }
+            wifi.setText(Sync.online(this) ? "Wi-Fi: вкл" : "Wi-Fi: подключаюсь…");
+        } catch (Throwable e) {
+            wifi.setText("Wi-Fi");
+        }
+    }
 
     private final BroadcastReceiver tick = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) { updateClock(); }
@@ -66,7 +94,14 @@ public class HomeActivity extends Activity {
         disk = Ui.button(this, "Яндекс Диск", false, new View.OnClickListener() {
             @Override public void onClick(View v) { startActivity(new Intent(HomeActivity.this, YandexActivity.class)); }
         });
-        p.addView(disk, Ui.margins(this, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 52)), 0, 12, 0, 0));
+        // Wi-Fi одной кнопкой — чтобы не ходить в настройки
+        wifi = Ui.button(this, "Wi-Fi", false, new View.OnClickListener() {
+            @Override public void onClick(View v) { toggleWifi(); }
+        });
+        LinearLayout net = Ui.row(this);
+        net.addView(wifi, Ui.margins(this, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1), 0, 0, 6, 0));
+        net.addView(disk, Ui.margins(this, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 2), 6, 0, 0, 0));
+        p.addView(net, Ui.margins(this, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 52)), 0, 12, 0, 0));
 
         // Низ: приложения и настройки
         LinearLayout bottom = Ui.row(this);
@@ -93,6 +128,10 @@ public class HomeActivity extends Activity {
     protected void onResume() {
         super.onResume();
         registerReceiver(tick, new IntentFilter(Intent.ACTION_TIME_TICK));
+        IntentFilter nf = new IntentFilter("android.net.wifi.WIFI_STATE_CHANGED");
+        nf.addAction("android.net.conn.CONNECTIVITY_CHANGE");
+        registerReceiver(netChange, nf);
+        updateWifi();
         updateClock();
         updateReading();
         updateTiles();
@@ -103,7 +142,7 @@ public class HomeActivity extends Activity {
     private void updateDisk() {
         if (!Yandex.loggedIn(this)) { disk.setText("Яндекс Диск · войти"); return; }
         String when = Ui.prefs(this).getString("sync_when", null);
-        disk.setText(when == null ? "Яндекс Диск · забрать новое" : "Яндекс Диск · проверено " + when);
+        disk.setText(when == null ? "Яндекс Диск · забрать" : "Диск · " + when);
     }
 
     private void updateLight() {
@@ -116,6 +155,7 @@ public class HomeActivity extends Activity {
     protected void onPause() {
         super.onPause();
         try { unregisterReceiver(tick); } catch (Exception ignored) {}
+        try { unregisterReceiver(netChange); } catch (Exception ignored) {}
     }
 
     /** Это рабочий стол: «Назад» никуда не уводит. */
