@@ -94,6 +94,16 @@ final class Files {
 
     /** Открывает файл в родной читалке/просмотрщике ONYX и запоминает как «Читаю сейчас». */
     static void open(Context c, File f) {
+        String e0 = ext(f);
+        if (e0.equals("md") || e0.equals("markdown") || e0.equals("txt")) {
+            // Markdown и текст — своей читалкой, постранично
+            Intent mi = new Intent(c, MdActivity.class);
+            mi.putExtra("path", f.getAbsolutePath());
+            mi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            c.startActivity(mi);
+            remember(c, f);
+            return;
+        }
         if (ext(f).equals("pdf")) {
             // PDF — своей читалкой на Pdfium: старая читалка ONYX новые PDF не открывает
             Intent pi = new Intent(c, PdfActivity.class);
