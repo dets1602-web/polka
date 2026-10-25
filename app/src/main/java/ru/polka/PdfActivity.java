@@ -1,19 +1,18 @@
 package ru.polka;
 
 import android.app.Activity;
-import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.net.Uri;
+import android.graphics.Matrix;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.shockwave.pdfium.PdfDocument;
@@ -23,25 +22,32 @@ import java.io.File;
 
 /**
  * Своя читалка PDF на движке Pdfium (как в Chrome): открывает и новые PDF,
- * которые старая читалка ONYX не понимает. Постранично, без прокрутки — для e-ink.
- * Справа/кнопка «вперёд» — дальше, слева — назад, по центру — меню.
+ * которые старая читалка ONYX не понимает.
+ * Два пальца — увеличить/уменьшить, один палец — двигать увеличенную страницу,
+ * тап или свайп справа/слева и боковые кнопки — листать, двойной тап — страница целиком,
+ * «Назад» на книге — выйти. Меню нет.
  */
 public class PdfActivity extends Activity {
-    /** Режимы: страница целиком, по ширине, по ширине ×2 (для чертежей). */
-    private static final String[] MODES = {"Целиком", "По ширине", "Крупно ×2"};
+    private static final float MAX_ZOOM = 6f;
 
     private PdfiumCore core;
     private PdfDocument doc;
     private ParcelFileDescriptor fd;
     private File file;
-    private int pages, page, mode, offX, offY, fullW, fullH;
+    private int pages, page, offX, offY, fullW, fullH, pw = 595, ph = 842;
+    /** 0 — страница целиком; иначе масштаб относительно «по ширине». */
+    private float zoom;
     private ImageView img;
-    private TextView info;
-    private LinearLayout bar;
-    private TextView modeBtn;
+    private TextView info, num;
     private Bitmap bmp;
-    private int sw, sh;
+    private int sw, sh, tx, ty;
     private volatile boolean rendering, pending;
+
+    // жесты
+    private ScaleGestureDetector scaler;
+    private float downX, downY, gScale = 1f, fx, fy;
+    private boolean moved, scaling;
+    private long lastTap;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -52,57 +58,43 @@ public class PdfActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.WHITE);
         img = new ImageView(this);
-        img.setScaleType(ImageView.ScaleType.CENTER);
+        img.setScaleType(ImageView.ScaleType.MATRIX);
         root.addView(img, new FrameLayout.LayoutParams(-1, -1));
 
         info = Ui.text(this, "Открываю…", 18, true, Ui.INK);
         info.setGravity(Gravity.CENTER);
         root.addView(info, new FrameLayout.LayoutParams(-1, -1));
 
-        bar = Ui.column(this);
-        bar.setBackgroundColor(Color.WHITE);
-        int pad = Ui.dp(this, 10);
-        bar.setPadding(pad, pad, pad, pad);
-        LinearLayout r1 = Ui.row(this);
-        r1.addView(Ui.button(this, "‹ Закрыть", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { finish(); }
-        }), Ui.margins(this, Ui.weight(1), 0, 0, 6, 0));
-        modeBtn = Ui.button(this, MODES[0], false, new View.OnClickListener() {
-            @Override public void onClick(View v) { mode = (mode + 1) % MODES.length; offX = offY = 0; save(); render(); }
-        });
-        r1.addView(modeBtn, Ui.margins(this, Ui.weight(1), 6, 0, 0, 0));
-        bar.addView(r1, new LinearLayout.LayoutParams(-1, Ui.dp(this, 52)));
-        LinearLayout r2 = Ui.row(this);
-        r2.addView(Ui.button(this, "−10", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { go(page - 10); }
-        }), Ui.margins(this, Ui.weight(1), 0, 8, 6, 0));
-        r2.addView(Ui.button(this, "В начало", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { go(0); }
-        }), Ui.margins(this, Ui.weight(1), 6, 8, 6, 0));
-        r2.addView(Ui.button(this, "+10", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { go(page + 10); }
-        }), Ui.margins(this, Ui.weight(1), 6, 8, 0, 0));
-        bar.addView(r2, new LinearLayout.LayoutParams(-1, Ui.dp(this, 60)));
-        bar.addView(Ui.button(this, "Открыть в читалке ONYX", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { openExternal(); }
-        }), Ui.margins(this, new LinearLayout.LayoutParams(-1, Ui.dp(this, 52)), 0, 8, 0, 0));
-        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-1, -2);
-        bp.gravity = Gravity.BOTTOM;
-        bar.setVisibility(View.GONE);
-        root.addView(bar, bp);
-
+        num = Ui.text(this, "", 13, false, Ui.INK);
+        num.setBackgroundColor(Color.WHITE);
+        num.setPadding(Ui.dp(this, 6), Ui.dp(this, 2), Ui.dp(this, 6), Ui.dp(this, 2));
+        FrameLayout.LayoutParams np = new FrameLayout.LayoutParams(-2, -2);
+        np.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+        root.addView(num, np);
         setContentView(root);
 
-        root.setOnTouchListener(new View.OnTouchListener() {
-            @Override public boolean onTouch(View v, MotionEvent e) {
-                if (e.getAction() != MotionEvent.ACTION_UP) return true;
-                if (bar.getVisibility() == View.VISIBLE) { bar.setVisibility(View.GONE); return true; }
-                float x = e.getX() / v.getWidth();
-                if (x > 0.66f) next();
-                else if (x < 0.33f) prev();
-                else bar.setVisibility(View.VISIBLE);
+        scaler = new ScaleGestureDetector(this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override public boolean onScaleBegin(ScaleGestureDetector d) {
+                scaling = true;
+                gScale = 1f;
+                fx = d.getFocusX();
+                fy = d.getFocusY();
                 return true;
             }
+
+            @Override public boolean onScale(ScaleGestureDetector d) {
+                gScale *= d.getScaleFactor();
+                gScale = Math.max(0.2f, Math.min(8f, gScale));
+                Matrix m = new Matrix();
+                m.setTranslate(tx, ty);
+                m.postScale(gScale, gScale, fx, fy);
+                img.setImageMatrix(m);
+                return true;
+            }
+        });
+
+        root.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, MotionEvent e) { return touch(v, e); }
         });
 
         if (!file.exists() || file.length() == 0) {
@@ -110,7 +102,7 @@ public class PdfActivity extends Activity {
             return;
         }
         page = Ui.prefs(this).getInt("page:" + file.getAbsolutePath(), 0);
-        mode = Ui.prefs(this).getInt("pdfmode", 0);
+        zoom = Ui.prefs(this).getFloat("pdfzoom", 0f);
         root.post(new Runnable() {
             @Override public void run() {
                 sw = img.getWidth();
@@ -119,6 +111,48 @@ public class PdfActivity extends Activity {
             }
         });
     }
+
+    private boolean touch(View v, MotionEvent e) {
+        scaler.onTouchEvent(e);
+        int slop = Ui.dp(this, 14);
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                downX = e.getX();
+                downY = e.getY();
+                moved = false;
+                scaling = false;
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (scaling || e.getPointerCount() > 1) break;
+                float dx = e.getX() - downX, dy = e.getY() - downY;
+                if (Math.abs(dx) + Math.abs(dy) > slop) moved = true;
+                if (moved && bigger()) {
+                    Matrix m = new Matrix();
+                    m.setTranslate(tx + dx, ty + dy);
+                    img.setImageMatrix(m);
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+                if (scaling) { applyZoom(); break; }
+                float ux = e.getX() - downX, uy = e.getY() - downY;
+                if (moved) {
+                    if (bigger()) pan(ux, uy);
+                    else if (Math.abs(ux) > Ui.dp(this, 50) && Math.abs(ux) > Math.abs(uy)) { if (ux < 0) next(); else prev(); }
+                    break;
+                }
+                long now = System.currentTimeMillis();
+                if (now - lastTap < 350) { lastTap = 0; fitPage(); break; }
+                lastTap = now;
+                float x = e.getX() / v.getWidth();
+                if (x > 0.66f) next();
+                else if (x < 0.33f) prev();
+                break;
+        }
+        return true;
+    }
+
+    /** Страница больше экрана — её можно двигать. */
+    private boolean bigger() { return fullW > sw || fullH > sh; }
 
     private void open() {
         new Thread(new Runnable() {
@@ -137,7 +171,7 @@ public class PdfActivity extends Activity {
                 final String error = err;
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
-                        if (error != null) { info.setText(error + "\n\nМожно попробовать «Открыть в читалке ONYX» — тап по центру."); return; }
+                        if (error != null) { info.setText(error); return; }
                         render();
                     }
                 });
@@ -145,15 +179,24 @@ public class PdfActivity extends Activity {
         }).start();
     }
 
-    /** Размер страницы целиком на экране в текущем режиме. */
+    private float fitWidth() { return sw / (float) pw; }
+
+    private float fitPageScale() { return Math.min(sw / (float) pw, sh / (float) ph); }
+
+    private float scale() { return zoom <= 0 ? fitPageScale() : fitWidth() * zoom; }
+
+    /** Размер страницы на экране и проверка, что окно не вылезает за страницу. */
     private void layoutPage() {
-        int pw = core.getPageWidthPoint(doc, page), ph = core.getPageHeightPoint(doc, page);
+        pw = core.getPageWidthPoint(doc, page);
+        ph = core.getPageHeightPoint(doc, page);
         if (pw <= 0 || ph <= 0) { pw = 595; ph = 842; }
-        float s;
-        if (mode == 0) s = Math.min(sw / (float) pw, sh / (float) ph);
-        else s = sw * (mode == 2 ? 2f : 1f) / pw;
+        float s = scale();
         fullW = Math.max(1, Math.round(pw * s));
         fullH = Math.max(1, Math.round(ph * s));
+        offX = Math.max(0, Math.min(offX, fullW - sw));
+        offY = Math.max(0, Math.min(offY, fullH - sh));
+        if (fullW <= sw) offX = 0;
+        if (fullH <= sh) offY = 0;
     }
 
     private void render() {
@@ -161,7 +204,6 @@ public class PdfActivity extends Activity {
         if (rendering) { pending = true; return; }
         rendering = true;
         pending = false;
-        modeBtn.setText(MODES[mode]);
         new Thread(new Runnable() {
             @Override public void run() {
                 String err = null;
@@ -174,12 +216,17 @@ public class PdfActivity extends Activity {
                     core.renderPageBitmap(doc, out, page, -offX, -offY, fullW, fullH, true);
                     final Bitmap old = bmp;
                     bmp = out;
+                    final int bx = Math.max(0, (sw - bw) / 2), by = Math.max(0, (sh - bh) / 2);
                     runOnUiThread(new Runnable() {
                         @Override public void run() {
+                            tx = bx;
+                            ty = by;
+                            Matrix m = new Matrix();
+                            m.setTranslate(tx, ty);
+                            img.setImageMatrix(m);
                             img.setImageBitmap(bmp);
-                            String part = (fullW > sw || fullH > sh) ? "  · часть " + (offY / Math.max(1, sh) * cols() + offX / Math.max(1, sw) + 1) + "/" + (rows() * cols()) : "";
                             info.setText("");
-                            setTitleBar((page + 1) + " / " + pages + part);
+                            num.setText((page + 1) + " / " + pages);
                             if (old != null && old != bmp) old.recycle();
                         }
                     });
@@ -198,23 +245,41 @@ public class PdfActivity extends Activity {
         }).start();
     }
 
-    private TextView pageLabel;
-
-    private void setTitleBar(String s) {
-        if (pageLabel == null) {
-            pageLabel = Ui.text(this, "", 16, true, Ui.INK);
-            pageLabel.setGravity(Gravity.CENTER);
-            pageLabel.setPadding(0, Ui.dp(this, 6), 0, 0);
-            bar.addView(pageLabel, 0);
+    /** После жеста двумя пальцами: новый масштаб, точка под пальцами остаётся на месте. */
+    private void applyZoom() {
+        scaling = false;
+        if (doc == null) return;
+        float s0 = scale();
+        float s1 = s0 * gScale;
+        s1 = Math.max(fitPageScale(), Math.min(fitWidth() * MAX_ZOOM, s1));
+        // точка страницы под центром жеста
+        float px = (offX + (fx - tx)) / s0, py = (offY + (fy - ty)) / s0;
+        if (s1 <= fitPageScale() * 1.01f) {
+            zoom = 0;
+            offX = offY = 0;
+        } else {
+            zoom = s1 / fitWidth();
+            offX = Math.round(px * s1 - fx);
+            offY = Math.round(py * s1 - fy);
         }
-        pageLabel.setText(s);
+        save();
+        render();
     }
 
-    private int cols() { return Math.max(1, (fullW + sw - 1) / Math.max(1, sw)); }
+    private void pan(float dx, float dy) {
+        offX -= Math.round(dx);
+        offY -= Math.round(dy);
+        render();
+    }
 
-    private int rows() { return Math.max(1, (fullH + sh - 1) / Math.max(1, sh)); }
+    private void fitPage() {
+        zoom = 0;
+        offX = offY = 0;
+        save();
+        render();
+    }
 
-    /** Дальше: сначала по частям страницы (слева направо, сверху вниз), потом следующая страница. */
+    /** Дальше: если страница увеличена — сначала её части (слева направо, сверху вниз), потом следующая. */
     private void next() {
         if (doc == null) return;
         if (offX + sw < fullW) offX += sw;
@@ -228,30 +293,15 @@ public class PdfActivity extends Activity {
     private void prev() {
         if (doc == null) return;
         if (offX > 0) offX = Math.max(0, offX - sw);
-        else if (offY > 0) { offY = Math.max(0, offY - sh); offX = Math.max(0, (cols() - 1) * sw); }
+        else if (offY > 0) { offY = Math.max(0, offY - sh); offX = Math.max(0, fullW - sw); }
         else if (page > 0) { page--; offX = offY = 0; }
         else return;
         save();
         render();
     }
 
-    private void go(int p) {
-        if (doc == null) return;
-        page = Math.max(0, Math.min(pages - 1, p));
-        offX = offY = 0;
-        save();
-        render();
-    }
-
     private void save() {
-        Ui.prefs(this).edit().putInt("page:" + file.getAbsolutePath(), page).putInt("pdfmode", mode).apply();
-    }
-
-    private void openExternal() {
-        Intent i = new Intent(Intent.ACTION_VIEW);
-        i.setDataAndType(Uri.fromFile(file), "application/pdf");
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try { startActivity(i); } catch (Exception e) { info.setText("Читалки ONYX для PDF нет."); }
+        Ui.prefs(this).edit().putInt("page:" + file.getAbsolutePath(), page).putFloat("pdfzoom", zoom).apply();
     }
 
     @Override
