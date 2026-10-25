@@ -13,7 +13,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
-      - uses: android-actions/setup-android@v3
       - name: Сборка
         run: chmod +x gradlew && ./gradlew --no-daemon assembleDebug
       # Постоянная ссылка: github.com/<владелец>/polka/releases/download/latest/Razvedchik.apk
