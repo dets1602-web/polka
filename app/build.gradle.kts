@@ -14,11 +14,11 @@ android {
     compileSdk = 30
     defaultConfig {
         applicationId = "ru.polka"
-        minSdk = 21
+        minSdk = 17
         // 22 — чтобы на Android 6 доступ к памяти давался сразу при установке, без запросов
         targetSdk = 22
-        versionCode = 2
-        versionName = "0.2"
+        versionCode = 3
+        versionName = "0.3"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8

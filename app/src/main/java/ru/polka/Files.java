@@ -38,7 +38,7 @@ final class Files {
             @Override public int compare(File a, File b) { return a.getName().compareToIgnoreCase(b.getName()); }
         });
         Collections.sort(files, new Comparator<File>() {
-            @Override public int compare(File a, File b) { return Long.compare(b.lastModified(), a.lastModified()); }
+            @Override public int compare(File a, File b) { long x = b.lastModified(), y = a.lastModified(); return x < y ? -1 : (x == y ? 0 : 1); }
         });
         dirs.addAll(files);
         return dirs;
