@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -112,5 +113,23 @@ public class FolderActivity extends Activity {
             sep.setBackgroundColor(Ui.INK);
             listBox.addView(sep, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 1)));
         }
+    }
+
+    /** Боковые кнопки листания ONYX (и громкость, на которую они бывают назначены). */
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_PAGE_DOWN:
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if ((page + 1) * PER_PAGE < items.size()) { page++; render(); }
+                return true;
+            case KeyEvent.KEYCODE_PAGE_UP:
+            case KeyEvent.KEYCODE_VOLUME_UP:
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (page > 0) { page--; render(); }
+                return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 }

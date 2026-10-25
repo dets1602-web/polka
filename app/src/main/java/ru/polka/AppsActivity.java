@@ -12,6 +12,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -200,5 +201,23 @@ public class AppsActivity extends Activity {
         } catch (Exception e) {
             Toast.makeText(c, "Настройки не открылись", Toast.LENGTH_LONG).show();
         }
+    }
+
+    /** Боковые кнопки листания ONYX (и громкость, на которую они бывают назначены). */
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_PAGE_DOWN:
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if ((page + 1) * COLS * ROWS < apps.size()) { page++; render(); }
+                return true;
+            case KeyEvent.KEYCODE_PAGE_UP:
+            case KeyEvent.KEYCODE_VOLUME_UP:
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (page > 0) { page--; render(); }
+                return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 }
