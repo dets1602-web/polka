@@ -29,7 +29,56 @@ final class Yandex {
 
     static boolean loggedIn(Context c) { return prefs(c).getString("access", null) != null; }
 
-    static void logout(Context c) { prefs(c).edit().clear().apply(); }
+    static void logout(Context c) { prefs(c).edit().remove("access").remove("refresh").remove("expires").apply(); }
+
+    // ---------- Секрет приложения: только на книге, не в коде ----------
+
+    private static final java.util.regex.Pattern SECRET = java.util.regex.Pattern.compile("[0-9a-fA-F]{32}");
+
+    /** Файлы, куда можно положить секрет с компьютера. Прочитав, «Полка» их удаляет. */
+    private static java.io.File[] secretFiles() {
+        java.io.File sd = android.os.Environment.getExternalStorageDirectory();
+        return new java.io.File[]{
+                new java.io.File(sd, "polka-secret.txt"),
+                new java.io.File(sd, "Download/polka-secret.txt"),
+                new java.io.File(sd, "polka-secret.txt.txt")
+        };
+    }
+
+    /** Секрет из памяти «Полки»; если его нет — пробует забрать из файла. */
+    static String secret(Context c) {
+        String s = prefs(c).getString("secret", null);
+        if (s != null) return s;
+        for (java.io.File f : secretFiles()) {
+            if (!f.exists()) continue;
+            try {
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(f), "UTF-8"));
+                StringBuilder all = new StringBuilder();
+                String ln;
+                while ((ln = r.readLine()) != null) all.append(ln).append(' ');
+                r.close();
+                java.util.regex.Matcher m = SECRET.matcher(all);
+                if (m.find() && setSecret(c, m.group())) {
+                    f.delete();
+                    return m.group();
+                }
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    static boolean setSecret(Context c, String s) {
+        if (s == null) return false;
+        s = s.trim();
+        if (!SECRET.matcher(s).matches()) return false;
+        prefs(c).edit().putString("secret", s.toLowerCase(java.util.Locale.US)).apply();
+        return true;
+    }
+
+    private static String secretParam(Context c) {
+        String s = secret(c);
+        return s == null ? "" : "&client_secret=" + Net.enc(s);
+    }
 
     // ---------- Вход по коду ----------
 
@@ -59,7 +108,7 @@ final class Yandex {
 
     /** null — ещё ждём; "" — вошли; иначе текст ошибки. */
     static String poll(Context c, Code k) throws Exception {
-        String form = "grant_type=device_code&code=" + Net.enc(k.deviceCode) + "&client_id=" + Net.enc(CLIENT_ID);
+        String form = "grant_type=device_code&code=" + Net.enc(k.deviceCode) + "&client_id=" + Net.enc(CLIENT_ID) + secretParam(c);
         Net.Resp r = Net.request(c, "POST", OAUTH + "/token", form, null);
         JSONObject j = new JSONObject(r.body.length() > 0 ? r.body : "{}");
         if (r.code == 200 && j.has("access_token")) {
@@ -86,7 +135,7 @@ final class Yandex {
         String refresh = p.getString("refresh", null);
         if (refresh == null) return;
         if (System.currentTimeMillis() < p.getLong("expires", 0) - 7L * 24 * 3600 * 1000) return;
-        String form = "grant_type=refresh_token&refresh_token=" + Net.enc(refresh) + "&client_id=" + Net.enc(CLIENT_ID);
+        String form = "grant_type=refresh_token&refresh_token=" + Net.enc(refresh) + "&client_id=" + Net.enc(CLIENT_ID) + secretParam(c);
         Net.Resp r = Net.request(c, "POST", OAUTH + "/token", form, null);
         if (r.code == 200) save(c, new JSONObject(r.body));
     }

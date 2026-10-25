@@ -52,6 +52,31 @@ public class YandexActivity extends Activity {
             body.addView(Ui.button(this, "Выйти из Яндекса", false, new View.OnClickListener() {
                 @Override public void onClick(View v) { Yandex.logout(YandexActivity.this); render(); say(""); }
             }), Ui.margins(this, Ui.matchWrap(), 0, 20, 0, 0));
+        } else if (Yandex.secret(this) == null) {
+            body.addView(Ui.text(this, "Шаг 1. Секрет приложения", 22, true, Ui.INK));
+            body.addView(Ui.text(this, "Яндекс просит секрет приложения «Полка» (Client secret на oauth.yandex.ru). "
+                    + "Он хранится только в этой книге.\n\n"
+                    + "Проще всего: подключите книгу к компьютеру и положите в память книги файл polka-secret.txt "
+                    + "с секретом внутри. «Полка» сама его заберёт и удалит файл.\n\nИли введите здесь:", 16, false, Ui.INK));
+            final android.widget.EditText field = new android.widget.EditText(this);
+            field.setSingleLine(true);
+            field.setTextSize(18);
+            field.setHint("32 буквы и цифры");
+            field.setTextColor(Ui.INK);
+            field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+            body.addView(field, Ui.margins(this, Ui.matchWrap(), 0, 8, 0, 8));
+            body.addView(Ui.button(this, "Сохранить секрет", true, new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (Yandex.setSecret(YandexActivity.this, field.getText().toString())) { say("Секрет сохранён."); render(); }
+                    else say("Не похоже на секрет: нужно ровно 32 знака (цифры и буквы a–f).");
+                }
+            }), Ui.matchWrap());
+            body.addView(Ui.button(this, "Проверить файл polka-secret.txt", false, new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (Yandex.secret(YandexActivity.this) != null) { say("Секрет забрал из файла, файл удалил."); render(); }
+                    else say("Файла с секретом в памяти книги нет.");
+                }
+            }), Ui.margins(this, Ui.matchWrap(), 0, 10, 0, 0));
         } else {
             body.addView(Ui.text(this, "Чтобы «Полка» забирала файлы с Диска, войдите в Яндекс. "
                     + "Пароль вводится на телефоне, книга его не увидит. Доступ — только чтение Диска.", 17, false, Ui.INK));
