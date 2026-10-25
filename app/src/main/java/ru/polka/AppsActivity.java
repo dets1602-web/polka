@@ -62,6 +62,10 @@ public class AppsActivity extends Activity {
         p.addView(Ui.button(this, "Разведчик", false, new View.OnClickListener() {
             @Override public void onClick(View v) { startActivity(new Intent(AppsActivity.this, ScoutActivity.class)); }
         }), Ui.margins(this, Ui.matchWrap(), 0, 10, 0, 0));
+        update = Ui.button(this, "Обновить «Полку»", false, new View.OnClickListener() {
+            @Override public void onClick(View v) { installUpdate(); }
+        });
+        p.addView(update, Ui.margins(this, Ui.matchWrap(), 0, 10, 0, 0));
 
         setContentView(p);
     }
@@ -71,6 +75,46 @@ public class AppsActivity extends Activity {
         super.onResume();
         load();
         render();
+        updateLabel();
+    }
+
+    private TextView update;
+
+    /** Новая «Полка» кладётся с компьютера сюда. */
+    private static java.io.File updateFile() {
+        return new java.io.File(android.os.Environment.getExternalStorageDirectory(), "Download/Polka.apk");
+    }
+
+    private int installedCode() {
+        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; } catch (Exception e) { return 0; }
+    }
+
+    private String installedName() {
+        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return "?"; }
+    }
+
+    private void updateLabel() {
+        java.io.File f = updateFile();
+        android.content.pm.PackageInfo pi = f.exists() ? getPackageManager().getPackageArchiveInfo(f.getAbsolutePath(), 0) : null;
+        if (pi == null) {
+            update.setText("Обновить «Полку» · сейчас " + installedName() + ", файла нет");
+        } else if (pi.versionCode > installedCode()) {
+            update.setText("Обновить «Полку» до " + pi.versionName);
+        } else {
+            update.setText("«Полка» " + installedName() + " — новее нет");
+        }
+    }
+
+    private void installUpdate() {
+        java.io.File f = updateFile();
+        if (!f.exists()) {
+            Toast.makeText(this, "Нет файла Download/Polka.apk", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(android.net.Uri.fromFile(f), "application/vnd.android.package-archive");
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try { startActivity(i); } catch (Exception e) { Toast.makeText(this, "Установщик не открылся", Toast.LENGTH_LONG).show(); }
     }
 
     private void load() {
