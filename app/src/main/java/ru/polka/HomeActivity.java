@@ -177,7 +177,7 @@ public class HomeActivity extends Activity {
         String sub;
         int fresh = 0;
         if (name.equals("Рамка")) {
-            sub = "скоро · пока «Разведчик»";
+            sub = Frame.enabled(this) ? "во сне · включена" : "во сне · выключена";
         } else {
             File dir = Ui.folder(name);
             int n = Files.countFiles(dir);
@@ -199,7 +199,7 @@ public class HomeActivity extends Activity {
         t.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (name.equals("Рамка")) {
-                    startActivity(new Intent(HomeActivity.this, ScoutActivity.class));
+                    startActivity(new Intent(HomeActivity.this, FrameActivity.class));
                 } else {
                     Intent i = new Intent(HomeActivity.this, FolderActivity.class);
                     i.putExtra("dir", Ui.folder(name).getAbsolutePath());

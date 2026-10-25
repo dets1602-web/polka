@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application android:label="Полка" android:allowBackup="false"
         android:theme="@android:style/Theme.Holo.Light.NoActionBar">
         <!-- Главный экран: может стать рабочим столом книги -->
@@ -28,5 +30,11 @@
         android:theme="@android:style/Theme.Holo.Light.NoActionBar.Fullscreen" />
     <activity android:name=".PdfActivity" android:screenOrientation="portrait"
         android:theme="@android:style/Theme.Holo.Light.NoActionBar.Fullscreen" />
+    <activity android:name=".FrameActivity" android:screenOrientation="portrait" />
+        <receiver android:name=".FrameReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
