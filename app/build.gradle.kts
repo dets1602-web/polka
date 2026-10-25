@@ -22,8 +22,8 @@ android {
         minSdk = 17
         // 22 — чтобы на Android 6 доступ к памяти давался сразу при установке, без запросов
         targetSdk = 22
-        versionCode = 12
-        versionName = "0.12"
+        versionCode = 13
+        versionName = "0.13"
         // Процессор книги — ARMv7; лишние варианты библиотеки шифрования не тащим
         ndk { abiFilters += listOf("armeabi-v7a") }
     }

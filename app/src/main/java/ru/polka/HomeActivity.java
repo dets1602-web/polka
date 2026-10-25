@@ -24,7 +24,7 @@ public class HomeActivity extends Activity {
     private static final Locale RU = new Locale("ru");
     private TextView time, date, battery;
     private LinearLayout reading, tiles;
-    private TextView light;
+    private TextView light, disk;
 
     private final BroadcastReceiver tick = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) { updateClock(); }
@@ -61,6 +61,12 @@ public class HomeActivity extends Activity {
         tiles = Ui.column(this);
         p.addView(tiles, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 
+        // Яндекс Диск
+        disk = Ui.button(this, "Яндекс Диск", false, new View.OnClickListener() {
+            @Override public void onClick(View v) { startActivity(new Intent(HomeActivity.this, YandexActivity.class)); }
+        });
+        p.addView(disk, Ui.margins(this, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 52)), 0, 12, 0, 0));
+
         // Низ: приложения и настройки
         LinearLayout bottom = Ui.row(this);
         bottom.addView(Ui.button(this, "Приложения", true, new View.OnClickListener() {
@@ -90,6 +96,13 @@ public class HomeActivity extends Activity {
         updateReading();
         updateTiles();
         updateLight();
+        updateDisk();
+    }
+
+    private void updateDisk() {
+        if (!Yandex.loggedIn(this)) { disk.setText("Яндекс Диск · войти"); return; }
+        String when = Ui.prefs(this).getString("sync_when", null);
+        disk.setText(when == null ? "Яндекс Диск · забрать новое" : "Яндекс Диск · проверено " + when);
     }
 
     private void updateLight() {

@@ -135,6 +135,58 @@ final class Net {
         if (!part.renameTo(to)) throw new Exception("не удалось сохранить " + to.getName());
     }
 
+    /** Ответ сервера: код и текст. */
+    static final class Resp {
+        int code;
+        String body = "";
+    }
+
+    /** Запрос к API: GET или POST формы, с заголовком авторизации. */
+    static Resp request(Context c, String method, String url, String form, String auth) throws Exception {
+        HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
+        if (con instanceof HttpsURLConnection) ((HttpsURLConnection) con).setSSLSocketFactory(factory(c));
+        con.setRequestMethod(method);
+        con.setInstanceFollowRedirects(false);
+        con.setConnectTimeout(20000);
+        con.setReadTimeout(30000);
+        con.setRequestProperty("User-Agent", "Polka/1 (ONYX; Android 4.2)");
+        con.setRequestProperty("Accept", "application/json");
+        if (auth != null) con.setRequestProperty("Authorization", auth);
+        if (form != null) {
+            byte[] b = form.getBytes("UTF-8");
+            con.setDoOutput(true);
+            con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            con.setFixedLengthStreamingMode(b.length);
+            OutputStream os = con.getOutputStream();
+            os.write(b);
+            os.close();
+        }
+        Resp r = new Resp();
+        try {
+            r.code = con.getResponseCode();
+        } catch (java.io.IOException e) {
+            // Старый Android не понимает ответ 401 без заголовка WWW-Authenticate и бросает ошибку
+            if (String.valueOf(e.getMessage()).contains("authentication challenge")) r.code = 401;
+            else throw e;
+        }
+        InputStream in = null;
+        try { in = r.code >= 400 ? con.getErrorStream() : con.getInputStream(); } catch (Exception ignored) {}
+        if (in != null) {
+            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+            in.close();
+            r.body = bo.toString("UTF-8");
+        }
+        con.disconnect();
+        return r;
+    }
+
+    static String enc(String s) {
+        try { return java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20"); } catch (Exception e) { return s; }
+    }
+
     /** Обёртка: на каждом соединении включает TLS 1.2 и 1.1, если они есть. */
     private static final class Tls12 extends SSLSocketFactory {
         private final SSLSocketFactory d;
