@@ -2,7 +2,7 @@ plugins { id("com.android.application") }
 
 android {
     namespace = "ru.polka"
-    compileSdk = 34
+    compileSdk = 30
     defaultConfig {
         applicationId = "ru.polka"
         minSdk = 21
