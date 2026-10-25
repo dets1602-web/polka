@@ -11,6 +11,12 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.content.ContentResolver;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.view.WindowManager;
 import android.os.Environment;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
@@ -20,7 +26,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -123,6 +132,22 @@ public class ScoutActivity extends Activity {
         dumpSettings(Settings.Secure.CONTENT_URI, "secure");
         line("");
 
+        line("=== /data/local/assets — все файлы ===");
+        listAll(new File("/data/local/assets"), 0);
+        line("");
+        line("=== /system/media — все файлы ===");
+        listAll(new File("/system/media"), 0);
+        line("");
+        line("=== Подсветка ===");
+        lightInfo();
+        line("");
+        line("=== Приложения ONYX ===");
+        onyxApps();
+        line("");
+        line("=== Все настройки system ===");
+        dumpAll(Settings.System.CONTENT_URI, "system");
+        line("");
+
         Set<String> seen = new HashSet<>();
         String[] roots = {
                 Environment.getExternalStorageDirectory().getAbsolutePath(),
@@ -164,6 +189,84 @@ public class ScoutActivity extends Activity {
             line(name + ": ошибка " + e.getMessage());
         } finally {
             if (c != null) c.close();
+        }
+    }
+
+    private void dumpAll(Uri uri, String name) {
+        Cursor c = null;
+        try {
+            c = getContentResolver().query(uri, new String[]{"name", "value"}, null, null, null);
+            if (c == null) { line(name + ": нет доступа"); return; }
+            while (c.moveToNext()) line(name + "." + c.getString(0) + " = " + c.getString(1));
+        } catch (Throwable e) {
+            line(name + ": ошибка " + e.getMessage());
+        } finally {
+            if (c != null) c.close();
+        }
+    }
+
+    /** Все файлы папки с размерами (и размером картинки), до 6 уровней. */
+    private void listAll(File dir, int depth) {
+        if (depth > 6) return;
+        File[] list = dir.listFiles();
+        if (list == null) { line(indent(depth) + "(не читается)"); return; }
+        for (File f : list) {
+            if (f.isDirectory()) {
+                line(indent(depth) + f.getName() + "/  писать:" + yn(f.canWrite()));
+                listAll(f, depth + 1);
+            } else {
+                String dim = "";
+                if (IMG.matcher(f.getName()).find()) {
+                    BitmapFactory.Options o = new BitmapFactory.Options();
+                    o.inJustDecodeBounds = true;
+                    BitmapFactory.decodeFile(f.getAbsolutePath(), o);
+                    dim = "  " + o.outWidth + "x" + o.outHeight;
+                }
+                line(indent(depth) + f.getName() + "  " + f.length() + " байт" + dim + "  писать:" + yn(f.canWrite()));
+            }
+        }
+    }
+
+    private static String readSmall(File f) {
+        try {
+            BufferedReader r = new BufferedReader(new FileReader(f));
+            String s = r.readLine();
+            r.close();
+            return s == null ? "" : s.trim();
+        } catch (Throwable e) {
+            return "?";
+        }
+    }
+
+    private static final String[] LIGHT_DIRS = {"/sys/class/backlight", "/sys/class/leds"};
+
+    private void lightInfo() {
+        ContentResolver cr = getContentResolver();
+        line("screen_brightness = " + Settings.System.getString(cr, Settings.System.SCREEN_BRIGHTNESS));
+        line("screen_brightness_mode = " + Settings.System.getString(cr, Settings.System.SCREEN_BRIGHTNESS_MODE));
+        for (String base : LIGHT_DIRS) {
+            File[] list = new File(base).listFiles();
+            if (list == null) { line(base + ": не читается"); continue; }
+            for (File d : list) {
+                File br = new File(d, "brightness");
+                line(base + "/" + d.getName() + "  brightness=" + readSmall(br)
+                        + " max=" + readSmall(new File(d, "max_brightness"))
+                        + " писать:" + yn(br.canWrite()));
+            }
+        }
+    }
+
+    private void onyxApps() {
+        try {
+            PackageManager pm = getPackageManager();
+            for (PackageInfo pi : pm.getInstalledPackages(PackageManager.GET_ACTIVITIES)) {
+                String n = pi.packageName.toLowerCase(Locale.US);
+                if (!n.contains("onyx") && !n.contains("boox")) continue;
+                line(pi.packageName);
+                if (pi.activities != null) for (ActivityInfo a : pi.activities) line("   " + a.name);
+            }
+        } catch (Throwable e) {
+            line("ошибка: " + e.getMessage());
         }
     }
 
@@ -273,6 +376,17 @@ public class ScoutActivity extends Activity {
                 }
             }
         }
+        box.addView(text("Картинка сна:", 20, true));
+        box.addView(button("Тест сна (положить standby)", new View.OnClickListener() {
+            @Override public void onClick(View v) { testStandby(); }
+        }));
+        box.addView(text("Подсветка — нажми и смотри, загорится ли свет на 4 секунды:", 20, true));
+        for (int i = 1; i <= 3; i++) {
+            final int m = i;
+            box.addView(button("Свет: способ " + m, new View.OnClickListener() {
+                @Override public void onClick(View v) { lightTest(m); }
+            }));
+        }
         box.addView(button("Вернуть всё как было", new View.OnClickListener() {
             @Override public void onClick(View v) { restoreAll(); }
         }));
@@ -314,16 +428,131 @@ public class ScoutActivity extends Activity {
         }
     }
 
+    private File createdList() { return new File(Environment.getExternalStorageDirectory(), "razvedchik_created.txt"); }
+
+    /** Кладёт тестовые картинки сна рядом с poweroff.png. Свои новые файлы запоминает, чтобы потом удалить. */
+    private void testStandby() {
+        try {
+            File dir = new File("/data/local/assets/images");
+            if (!dir.exists()) dir.mkdirs();
+            int w = 1024, h = 758;
+            File po = new File(dir, "poweroff.png");
+            File poBak = new File(backupDir, java.net.URLEncoder.encode(po.getAbsolutePath(), "UTF-8"));
+            File ref = poBak.exists() ? poBak : po;
+            if (ref.exists()) {
+                BitmapFactory.Options o = new BitmapFactory.Options();
+                o.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(ref.getAbsolutePath(), o);
+                if (o.outWidth > 0) { w = o.outWidth; h = o.outHeight; }
+            }
+            if (!backupDir.exists()) backupDir.mkdirs();
+            String[] names = {"standby-1.png", "standby.png", "standby_1.png"};
+            StringBuilder made = new StringBuilder();
+            for (String n : names) {
+                File f = new File(dir, n);
+                if (f.exists()) {
+                    File bak = new File(backupDir, java.net.URLEncoder.encode(f.getAbsolutePath(), "UTF-8"));
+                    if (!bak.exists()) copy(f, bak);
+                } else {
+                    made.append(f.getAbsolutePath()).append('\n');
+                }
+                Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                Canvas c = new Canvas(bmp);
+                c.drawColor(Color.WHITE);
+                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                p.setColor(Color.BLACK);
+                p.setTextAlign(Paint.Align.CENTER);
+                p.setTypeface(Typeface.DEFAULT_BOLD);
+                p.setTextSize(w / 7f);
+                c.drawText("ПОЛКА", w / 2f, h * 0.42f, p);
+                p.setTextSize(w / 14f);
+                c.drawText("сон — " + n, w / 2f, h * 0.55f, p);
+                OutputStream os = new FileOutputStream(f);
+                bmp.compress(Bitmap.CompressFormat.PNG, 95, os);
+                os.close();
+            }
+            FileWriter fw = new FileWriter(createdList(), true);
+            fw.write(made.toString());
+            fw.close();
+            say("Положил картинки сна. Коротко нажми кнопку питания — что на экране сна? Сфотографируй.");
+        } catch (Throwable e) {
+            say("Тест сна не вышел: " + e.getMessage());
+        }
+    }
+
+    private final Handler handler = new Handler();
+
+    /** 1 — системная яркость, 2 — яркость окна, 3 — файл ядра /sys. Включает на 4 с, потом выключает. */
+    private void lightTest(final int m) {
+        String r = setLight(m, 100);
+        say("Способ " + m + ": включаю… " + r);
+        handler.postDelayed(new Runnable() {
+            @Override public void run() {
+                setLight(m, 0);
+                say("Способ " + m + ": выключил. Загорался свет? Напиши номер способа.");
+            }
+        }, 4000);
+    }
+
+    private String setLight(int m, int pct) {
+        try {
+            if (m == 1) {
+                ContentResolver cr = getContentResolver();
+                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, 0);
+                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, pct * 255 / 100);
+                return "настройка записана";
+            } else if (m == 2) {
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                lp.screenBrightness = pct / 100f;
+                getWindow().setAttributes(lp);
+                return "яркость окна задана";
+            } else {
+                StringBuilder s = new StringBuilder();
+                for (String base : LIGHT_DIRS) {
+                    File[] list = new File(base).listFiles();
+                    if (list == null) continue;
+                    for (File d : list) {
+                        File br = new File(d, "brightness");
+                        if (!br.canWrite()) continue;
+                        int max = 255;
+                        try { max = Integer.parseInt(readSmall(new File(d, "max_brightness"))); } catch (Exception ignored) {}
+                        FileWriter fw = new FileWriter(br);
+                        fw.write(String.valueOf(pct * max / 100));
+                        fw.close();
+                        s.append(d.getName()).append(' ');
+                    }
+                }
+                return s.length() == 0 ? "нет файлов с правом записи" : "записал: " + s;
+            }
+        } catch (Throwable e) {
+            return "ошибка: " + e.getMessage();
+        }
+    }
+
     private void restoreAll() {
+        int del = 0;
+        File cl = createdList();
+        if (cl.exists()) {
+            try {
+                BufferedReader r = new BufferedReader(new FileReader(cl));
+                String ln;
+                while ((ln = r.readLine()) != null) {
+                    if (ln.trim().length() > 0 && new File(ln.trim()).delete()) del++;
+                }
+                r.close();
+            } catch (Throwable ignored) {}
+            cl.delete();
+        }
         File[] list = backupDir.listFiles();
-        if (list == null || list.length == 0) { say("Нечего возвращать — ничего не менял."); return; }
+        if ((list == null || list.length == 0) && del == 0) { say("Нечего возвращать — ничего не менял."); return; }
+        if (list == null) list = new File[0];
         int ok = 0;
         for (File bak : list) {
             File orig;
             try { orig = new File(java.net.URLDecoder.decode(bak.getName(), "UTF-8")); } catch (Exception e) { continue; }
             try { copy(bak, orig); ok++; } catch (Throwable e) { say("Не вернул " + orig + ": " + e.getMessage()); }
         }
-        say("Вернул как было: " + ok + " из " + list.length);
+        say("Вернул как было: " + ok + " из " + list.length + ", удалил новых: " + del);
     }
 
     private void say(String s) { if (out != null) out.setText(s); }
