@@ -38,7 +38,12 @@ final class Files {
             @Override public int compare(File a, File b) { return a.getName().compareToIgnoreCase(b.getName()); }
         });
         Collections.sort(files, new Comparator<File>() {
-            @Override public int compare(File a, File b) { long x = b.lastModified(), y = a.lastModified(); return x < y ? -1 : (x == y ? 0 : 1); }
+            // Свежие сверху; что пришло в одни и те же 5 минут — по имени (страницы 01, 02, …)
+            @Override public int compare(File a, File b) {
+                long x = b.lastModified() / 300000, y = a.lastModified() / 300000;
+                if (x != y) return x < y ? -1 : 1;
+                return a.getName().compareToIgnoreCase(b.getName());
+            }
         });
         dirs.addAll(files);
         return dirs;
@@ -89,6 +94,15 @@ final class Files {
 
     /** Открывает файл в родной читалке/просмотрщике ONYX и запоминает как «Читаю сейчас». */
     static void open(Context c, File f) {
+        if (ext(f).equals("pdf")) {
+            // PDF — своей читалкой на Pdfium: старая читалка ONYX новые PDF не открывает
+            Intent pi = new Intent(c, PdfActivity.class);
+            pi.putExtra("path", f.getAbsolutePath());
+            pi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            c.startActivity(pi);
+            remember(c, f);
+            return;
+        }
         String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext(f));
         if (mime == null) {
             String e = ext(f);
@@ -102,13 +116,17 @@ final class Files {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             c.startActivity(i);
-            SharedPreferences p = Ui.prefs(c);
-            Set<String> o = opened(c);
-            o.add(f.getAbsolutePath());
-            p.edit().putStringSet("opened", o).putString("last", f.getAbsolutePath()).apply();
+            remember(c, f);
         } catch (ActivityNotFoundException e) {
             Toast.makeText(c, "Нечем открыть ." + ext(f), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private static void remember(Context c, File f) {
+        SharedPreferences p = Ui.prefs(c);
+        Set<String> o = opened(c);
+        o.add(f.getAbsolutePath());
+        p.edit().putStringSet("opened", o).putString("last", f.getAbsolutePath()).apply();
     }
 
     static final List<String> SHELVES = Arrays.asList("Книги", "Схемы", "Документация");

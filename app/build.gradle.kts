@@ -22,8 +22,8 @@ android {
         minSdk = 17
         // 22 — чтобы на Android 6 доступ к памяти давался сразу при установке, без запросов
         targetSdk = 22
-        versionCode = 16
-        versionName = "0.16"
+        versionCode = 17
+        versionName = "0.17"
         // Процессор книги — ARMv7; лишние варианты библиотеки шифрования не тащим
         ndk { abiFilters += listOf("armeabi-v7a") }
     }
@@ -37,4 +37,6 @@ android {
 dependencies {
     // Современное шифрование (TLS 1.2/1.3, AES-GCM): в Android 4.2 его нет, а GitHub и Яндекс без него не пускают
     implementation("org.conscrypt:conscrypt-android:2.5.2")
+    // Движок PDF из Chrome — для новых PDF, которые не понимает читалка ONYX
+    implementation("com.github.barteksc:pdfium-android:1.9.0")
 }

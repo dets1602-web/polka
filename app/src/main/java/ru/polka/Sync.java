@@ -137,6 +137,7 @@ final class Sync {
             }
             long size = it.optLong("size", -1);
             File local = new File(dir, name);
+            if (size == 0) { r.skipped++; log.say("На Диске пустой файл: " + name); continue; }
             if (local.exists() && local.length() == size) { r.skipped++; continue; }
             if (size > MAX_FILE) { r.errors++; continue; }
             boolean existed = local.exists();
@@ -145,6 +146,11 @@ final class Sync {
                 String url = it.optString("file", "");
                 if (url.length() == 0) url = Yandex.downloadUrl(c, it.optString("path"));
                 Net.download(c, url, local);
+                if (size > 0 && local.length() != size) {
+                    long got = local.length();
+                    local.delete();
+                    throw new Exception("скачалось " + got + " из " + size + " байт");
+                }
                 if (existed) r.updated++; else r.added++;
             } catch (Throwable e) {
                 r.errors++;

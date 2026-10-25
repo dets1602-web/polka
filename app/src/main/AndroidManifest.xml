@@ -24,5 +24,7 @@
         <activity android:name=".AppsActivity" android:screenOrientation="portrait" />
         <activity android:name=".ScoutActivity" android:label="Разведчик" android:screenOrientation="portrait" />
         <activity android:name=".YandexActivity" android:screenOrientation="portrait" />
+    <activity android:name=".PdfActivity" android:screenOrientation="portrait"
+        android:theme="@android:style/Theme.Holo.Light.NoActionBar.Fullscreen" />
     </application>
 </manifest>
