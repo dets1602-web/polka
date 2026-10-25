@@ -27,6 +27,7 @@ public class FolderActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Crash.install(getApplicationContext());
         dir = new File(getIntent().getStringExtra("dir"));
         LinearLayout p = Ui.page(this);
         items = Files.list(dir);

@@ -32,24 +32,39 @@ final class Sync {
 
     /** Включает Wi-Fi, если он выключен, и ждёт подключения. Возвращает, был ли он включён до нас. */
     static boolean wifiOn(Context c, Log log) {
-        WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        boolean was = wm != null && wm.isWifiEnabled();
-        if (wm != null && !was) {
-            log.say("Включаю Wi-Fi…");
-            wm.setWifiEnabled(true);
-        }
-        ConnectivityManager cm = (ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
-        for (int i = 0; i < 45; i++) {
-            NetworkInfo ni = cm == null ? null : cm.getActiveNetworkInfo();
-            if (ni != null && ni.isConnected()) return was;
-            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+        boolean was = true; // если что-то пойдёт не так — Wi-Fi потом не трогаем
+        try {
+            WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            was = wm == null || wm.isWifiEnabled();
+            if (!was) {
+                log.say("Включаю Wi-Fi…");
+                if (!wm.setWifiEnabled(true)) {
+                    log.say("Wi-Fi не включился — включите вручную.");
+                    return true;
+                }
+            }
+            ConnectivityManager cm = (ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
+            for (int i = 0; i < 45; i++) {
+                NetworkInfo ni = cm == null ? null : cm.getActiveNetworkInfo();
+                if (ni != null && ni.isConnected()) return was;
+                if (i == 5) log.say("Жду подключения к Wi-Fi…");
+                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+            }
+            log.say("Wi-Fi не подключился за 45 секунд.");
+        } catch (Throwable e) {
+            Crash.note(c, "wifiOn", e);
+            log.say("Не смог включить Wi-Fi: " + e.getMessage());
         }
         return was;
     }
 
     static void wifiOff(Context c) {
-        WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        if (wm != null) wm.setWifiEnabled(false);
+        try {
+            WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm != null) wm.setWifiEnabled(false);
+        } catch (Throwable e) {
+            Crash.note(c, "wifiOff", e);
+        }
     }
 
     static Result run(Context c, Log log) {

@@ -33,6 +33,7 @@ public class HomeActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Crash.install(getApplicationContext());
         for (String s : Files.SHELVES) Ui.folder(s);
 
         LinearLayout p = Ui.page(this);

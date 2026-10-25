@@ -35,6 +35,7 @@ public class AppsActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Crash.install(getApplicationContext());
         LinearLayout p = Ui.page(this);
         p.addView(Ui.header(this, "Приложения", "всё, что установлено на книге"), Ui.matchWrap());
         p.addView(Ui.line(this, 2), Ui.margins(this, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 2)), 0, 12, 0, 12));

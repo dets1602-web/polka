@@ -72,6 +72,7 @@ public class ScoutActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Crash.install(getApplicationContext());
         DisplayMetrics dm = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(dm);
         screenW = Math.min(dm.widthPixels, dm.heightPixels);

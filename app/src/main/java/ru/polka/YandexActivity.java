@@ -16,6 +16,7 @@ public class YandexActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Crash.install(getApplicationContext());
         LinearLayout p = Ui.page(this);
         p.addView(Ui.header(this, "Яндекс Диск", "папка «Полка» на Диске → полки книги"), Ui.matchWrap());
         p.addView(Ui.line(this, 2), Ui.margins(this, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 2)), 0, 12, 0, 12));
@@ -142,9 +143,15 @@ public class YandexActivity extends Activity {
         say("Начинаю…");
         new Thread(new Runnable() {
             @Override public void run() {
-                Sync.Result r = Sync.run(YandexActivity.this, new Sync.Log() { @Override public void say(String s) { YandexActivity.this.say(s); } });
-                busy = false;
-                say(r.note);
+                try {
+                    Sync.Result r = Sync.run(YandexActivity.this, new Sync.Log() { @Override public void say(String s) { YandexActivity.this.say(s); } });
+                    say(r.note);
+                } catch (Throwable e) {
+                    Crash.note(YandexActivity.this, "sync", e);
+                    say("Ошибка: " + e.getMessage());
+                } finally {
+                    busy = false;
+                }
                 runOnUiThread(new Runnable() { @Override public void run() { render(); } });
             }
         }).start();
