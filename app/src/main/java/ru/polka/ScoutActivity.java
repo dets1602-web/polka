@@ -40,7 +40,7 @@ import java.util.regex.Pattern;
  * ищет картинку экрана сна и проверяет, можно ли её подменить.
  * Отчёт: на экране + файл /sdcard/razvedchik.txt
  */
-public class MainActivity extends Activity {
+public class ScoutActivity extends Activity {
 
     /** Слова в имени файла или папки, по которым ищем картинку сна. */
     private static final Pattern KEY = Pattern.compile(

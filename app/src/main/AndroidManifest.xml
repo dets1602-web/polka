@@ -2,14 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <application android:label="Разведчик" android:allowBackup="false"
+    <application android:label="Полка" android:allowBackup="false"
         android:theme="@android:style/Theme.Holo.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true"
-            android:screenOrientation="portrait">
+        <!-- Главный экран: может стать рабочим столом книги -->
+        <activity android:name=".HomeActivity" android:exported="true"
+            android:launchMode="singleTask" android:clearTaskOnLaunch="true"
+            android:stateNotNeeded="true" android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".FolderActivity" android:screenOrientation="portrait" />
+        <activity android:name=".AppsActivity" android:screenOrientation="portrait" />
+        <activity android:name=".ScoutActivity" android:label="Разведчик" android:screenOrientation="portrait" />
     </application>
 </manifest>
