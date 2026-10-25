@@ -30,6 +30,11 @@ final class Ui {
     }
 
     static File folder(String name) {
+        // «Книги» — это старая папка ONYX Books: там уже все книги, и родная читалка их тоже видит
+        if (name.equals("Книги")) {
+            File books = new File(Environment.getExternalStorageDirectory(), "Books");
+            if (books.isDirectory()) return books;
+        }
         File f = new File(root(), name);
         if (!f.exists()) f.mkdirs();
         return f;

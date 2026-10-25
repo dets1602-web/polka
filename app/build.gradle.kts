@@ -22,8 +22,8 @@ android {
         minSdk = 17
         // 22 — чтобы на Android 6 доступ к памяти давался сразу при установке, без запросов
         targetSdk = 22
-        versionCode = 7
-        versionName = "0.7"
+        versionCode = 8
+        versionName = "0.8"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
