@@ -95,14 +95,24 @@ final class Net {
     }
 
     /** Открывает адрес, сам проходит переадресации (GitHub отдаёт файл с другого сервера). */
-    static HttpURLConnection open(Context c, String url) throws Exception {
+    static HttpURLConnection open(Context c, String url) throws Exception { return open(c, url, null); }
+
+    /** Ключ доступа отправляем только серверам Яндекса — на чужие адреса при переадресации он не уходит. */
+    private static boolean yandexHost(URL u) {
+        String h = u.getHost().toLowerCase(java.util.Locale.US);
+        return u.getProtocol().equals("https") && (h.endsWith(".yandex.ru") || h.endsWith(".yandex.net") || h.equals("yandex.ru"));
+    }
+
+    static HttpURLConnection open(Context c, String url, String auth) throws Exception {
         for (int hop = 0; hop < 6; hop++) {
-            HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
+            URL u = new URL(url);
+            HttpURLConnection con = (HttpURLConnection) u.openConnection();
             if (con instanceof HttpsURLConnection) ((HttpsURLConnection) con).setSSLSocketFactory(factory(c));
             con.setInstanceFollowRedirects(false);
             con.setConnectTimeout(20000);
             con.setReadTimeout(30000);
             con.setRequestProperty("User-Agent", "Polka/1 (ONYX; Android 4.2)");
+            if (auth != null && yandexHost(u)) con.setRequestProperty("Authorization", auth);
             int code = con.getResponseCode();
             if (code >= 300 && code < 400) {
                 String loc = con.getHeaderField("Location");
@@ -120,8 +130,10 @@ final class Net {
         throw new Exception("слишком много переадресаций");
     }
 
-    static void download(Context c, String url, File to) throws Exception {
-        HttpURLConnection con = open(c, url);
+    static void download(Context c, String url, File to) throws Exception { download(c, url, to, null); }
+
+    static void download(Context c, String url, File to, String auth) throws Exception {
+        HttpURLConnection con = open(c, url, auth);
         File part = new File(to.getAbsolutePath() + ".part");
         InputStream in = con.getInputStream();
         OutputStream os = new FileOutputStream(part);

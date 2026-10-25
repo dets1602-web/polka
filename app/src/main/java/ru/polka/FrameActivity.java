@@ -44,27 +44,40 @@ public class FrameActivity extends Activity {
         if (old != null) old.recycle();
         boolean on = Frame.enabled(this);
         String when = Ui.prefs(this).getString("frame_when", null);
+        String note = Ui.prefs(this).getString("frame_note", "");
         status.setText(on
-                ? "Рамка включена" + (when != null ? " · обновлена " + when : "") + ". Раз в час «Полка» забирает новое с Диска и перерисовывает её. Новая картинка появится, когда книга уснёт (иногда — со второго раза)."
-                : "Сейчас во сне — картинки ONYX. Включите, и книга будет показывать вот это.");
+                ? "Рамка включена" + (when != null ? " · обновлена " + when : "") + ". " + note
+                + "\nРаз в час — новое фото и погода. Покажется, когда книга уснёт (иногда со второго раза)."
+                : "Сейчас во сне — картинки ONYX. Включите, и книга будет показывать фото с Диска, дату и погоду.");
         LinearLayout row = Ui.row(this);
         if (on) {
-            row.addView(Ui.button(this, "Обновить сейчас", true, new View.OnClickListener() {
-                @Override public void onClick(View v) {
-                    String err = Frame.draw(FrameActivity.this);
-                    render();
-                    if (err != null) status.setText("Не получилось: " + err);
-                }
+            row.addView(Ui.button(this, "Новое фото", true, new View.OnClickListener() {
+                @Override public void onClick(View v) { refresh(); }
             }), Ui.margins(this, Ui.weight(1), 0, 0, 6, 0));
             row.addView(Ui.button(this, "Выключить", false, new View.OnClickListener() {
                 @Override public void onClick(View v) { Frame.disable(FrameActivity.this); render(); }
             }), Ui.margins(this, Ui.weight(1), 6, 0, 0, 0));
         } else {
             row.addView(Ui.button(this, "Включить рамку во сне", true, new View.OnClickListener() {
-                @Override public void onClick(View v) { Frame.enable(FrameActivity.this); render(); }
+                @Override public void onClick(View v) { Frame.enable(FrameActivity.this); render(); refresh(); }
             }), Ui.weight(1));
         }
         body.addView(row, new LinearLayout.LayoutParams(-1, Ui.dp(this, 56)));
+    }
+
+    private boolean busy;
+
+    /** Новое фото и погода по Wi-Fi — в фоне, экран не замирает. */
+    private void refresh() {
+        if (busy) return;
+        busy = true;
+        status.setText("Беру новое фото и погоду… до минуты.");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try { Frame.refresh(FrameActivity.this, true); } catch (Throwable e) { Crash.note(FrameActivity.this, "frame refresh", e); }
+                runOnUiThread(new Runnable() { @Override public void run() { busy = false; render(); } });
+            }
+        }).start();
     }
 
     @Override

@@ -140,6 +140,69 @@ final class Yandex {
         if (r.code == 200) save(c, new JSONObject(r.body));
     }
 
+    /** Найденные фото и откуда они. */
+    static final class Photos {
+        JSONArray items = new JSONArray();
+        String source = "";
+        StringBuilder tried = new StringBuilder();
+    }
+
+    private static final String PHOTO_FIELDS = "name,type,media_type,preview,path";
+
+    private static JSONArray folderImages(Context c, String path, Photos log) throws Exception {
+        String f = "_embedded.items." + PHOTO_FIELDS.replace(",", ",_embedded.items.");
+        String url = API + "/resources?path=" + Net.enc(path) + "&sort=-created&limit=200&preview_size=1024x&preview_crop=false&fields=" + Net.enc(f);
+        Net.Resp r = Net.request(c, "GET", url, null, auth(c));
+        if (r.code != 200) { log.tried.append(path).append(": ").append(r.code).append("; "); return null; }
+        JSONObject e = new JSONObject(r.body).optJSONObject("_embedded");
+        JSONArray a = images(e == null ? null : e.optJSONArray("items"));
+        log.tried.append(path).append(": ").append(a.length()).append("; ");
+        return a;
+    }
+
+    private static JSONArray images(JSONArray a) {
+        JSONArray out = new JSONArray();
+        if (a == null) return out;
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject it = a.optJSONObject(i);
+            if (it == null || "dir".equals(it.optString("type"))) continue;
+            String n = it.optString("name").toLowerCase(java.util.Locale.US);
+            boolean img = "image".equals(it.optString("media_type")) || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".heic");
+            // скриншоты (переписки, экраны) на рамку не берём
+            if (!img || n.contains("screenshot") || n.contains("скриншот") || it.optString("preview").length() == 0) continue;
+            out.put(it);
+        }
+        return out;
+    }
+
+    /**
+     * Фото для рамки, по порядку: своя папка «Полка/Рамка» → раздел «Фото» (безлимитная автозагрузка)
+     * → «Фотокамера» → последние загруженные картинки.
+     */
+    static Photos framePhotos(Context c) throws Exception {
+        Photos p = new Photos();
+        String[][] places = {{"disk:/Полка/Рамка", "папка «Полка/Рамка»"}, {"photounlim:/", "раздел «Фото»"}, {"disk:/Фотокамера", "«Фотокамера»"}};
+        for (String[] pl : places) {
+            JSONArray a = folderImages(c, pl[0], p);
+            if (a != null && a.length() > 0) { p.items = a; p.source = pl[1]; return p; }
+        }
+        Net.Resp r = Net.request(c, "GET", API + "/resources/last-uploaded?media_type=image&limit=200&preview_size=1024x&fields="
+                + Net.enc("items." + PHOTO_FIELDS.replace(",", ",items.")), null, auth(c));
+        if (r.code == 200) {
+            p.items = images(new JSONObject(r.body).optJSONArray("items"));
+            p.tried.append("последние загруженные: ").append(p.items.length());
+            if (p.items.length() > 0) p.source = "последние загруженные";
+        } else {
+            p.tried.append("последние загруженные: ").append(r.code);
+        }
+        return p;
+    }
+
+    /** Скачать уменьшенную копию фото (ей нужен ключ доступа). */
+    static void downloadPreview(Context c, String url, java.io.File to) throws Exception {
+        Net.download(c, url, to, auth(c));
+    }
+
     private static String auth(Context c) throws Exception {
         refreshIfNeeded(c);
         String t = prefs(c).getString("access", null);

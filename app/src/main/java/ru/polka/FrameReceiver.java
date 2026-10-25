@@ -6,7 +6,7 @@ import android.content.Intent;
 import android.os.PowerManager;
 
 /**
- * Раз в час (и после включения книги): забрать новое с Диска и перерисовать рамку.
+ * Раз в час (и после включения книги): забрать новое с Диска, взять новое фото и погоду, перерисовать рамку.
  * Экран не трогаем — новая картинка покажется, когда книга уснёт.
  */
 public class FrameReceiver extends BroadcastReceiver {
@@ -29,10 +29,7 @@ public class FrameReceiver extends BroadcastReceiver {
         new Thread(new Runnable() {
             @Override public void run() {
                 try {
-                    if (Yandex.loggedIn(c)) {
-                        Sync.run(c, new Sync.Log() { @Override public void say(String s) {} });
-                    }
-                    Frame.draw(c);
+                    Frame.refresh(c, true);
                 } catch (Throwable e) {
                     Crash.note(c, "frame tick", e);
                 } finally {
