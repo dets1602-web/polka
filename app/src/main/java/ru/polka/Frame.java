@@ -96,30 +96,39 @@ final class Frame {
         cv.drawText(new SimpleDateFormat("EEEE", RU).format(now), m + dw + 16, 200, p);
         cv.drawRect(m, 262, W - m, 268, p);
 
-        // Что нового
+        // Что нового: файлы одной папки — одной строкой; список не залезает на «Читаю сейчас»
+        String last = Ui.prefs(c).getString("last", null);
+        boolean reading = last != null && new File(last).exists();
+        int limit = reading ? H - 250 : H - 90;
         int y = 330;
         p.setTypeface(Typeface.DEFAULT_BOLD);
         p.setTextSize(30);
-        List<File> fresh = freshFiles(c);
+        List<String[]> fresh = freshEntries(c);
         cv.drawText(fresh.isEmpty() ? "Нового на полках нет" : "Новое на полках", m, y, p);
         y += 20;
         p.setTypeface(Typeface.DEFAULT);
         p.setTextSize(28);
-        for (int i = 0; i < Math.min(6, fresh.size()); i++) {
-            File f = fresh.get(i);
+        Paint g = new Paint(p);
+        g.setColor(0xFF555555);
+        g.setTextSize(21);
+        int shownCount = 0;
+        for (int i = 0; i < fresh.size(); i++) {
+            String[] e = fresh.get(i);
+            int reserve = i + 1 < fresh.size() ? 44 : 0;
+            if (y + 52 + 30 + reserve > limit) break;
             y += 52;
             cv.drawRect(m, y - 20, m + 12, y - 8, p);
-            cv.drawText(fit(p, Files.title(f), W - 2 * m - 30), m + 30, y, p);
+            cv.drawText(fit(p, e[0], W - 2 * m - 30), m + 30, y, p);
             y += 30;
-            Paint g = new Paint(p);
-            g.setColor(0xFF555555);
-            g.setTextSize(21);
-            cv.drawText(shelfOf(f), m + 30, y, g);
+            cv.drawText(fit(g, e[1], W - 2 * m - 30), m + 30, y, g);
+            shownCount++;
+        }
+        if (shownCount < fresh.size()) {
+            cv.drawText("…и ещё " + (fresh.size() - shownCount), m + 30, y + 40, g);
         }
 
         // Читаю сейчас
-        String last = Ui.prefs(c).getString("last", null);
-        if (last != null && new File(last).exists()) {
+        if (reading) {
             int by = H - 230;
             Paint box = new Paint();
             box.setStyle(Paint.Style.STROKE);
@@ -184,13 +193,48 @@ final class Frame {
         os.close();
     }
 
+    /** Новое на полках: {заголовок, подпись}. Несколько новых файлов в одной папке — одна строка. */
+    private static List<String[]> freshEntries(Context c) {
+        List<File> files = freshFiles(c);
+        java.util.LinkedHashMap<String, int[]> groups = new java.util.LinkedHashMap<>();
+        List<String[]> out = new ArrayList<>();
+        java.util.Set<String> shelfRoots = new java.util.HashSet<>();
+        for (String sh : Files.SHELVES) shelfRoots.add(Ui.folder(sh).getAbsolutePath());
+        for (File f : files) {
+            File parent = f.getParentFile();
+            String key = parent == null ? "" : parent.getAbsolutePath();
+            if (shelfRoots.contains(key)) {
+                out.add(new String[]{Files.title(f), shelfOf(f)});
+            } else if (groups.containsKey(key)) {
+                groups.get(key)[0]++;
+            } else {
+                groups.put(key, new int[]{1, out.size()});
+                out.add(null); // место группы — по самому свежему файлу
+            }
+        }
+        for (java.util.Map.Entry<String, int[]> e : groups.entrySet()) {
+            File dir = new File(e.getKey());
+            int n = e.getValue()[0];
+            String sub = shelfOf(dir) + (n > 1 ? " · " + Ui.plural(n, "новый файл", "новых файла", "новых файлов") : "");
+            String title = n > 1 ? dir.getName() : firstFile(files, e.getKey());
+            out.set(e.getValue()[1], new String[]{title, sub});
+        }
+        return out;
+    }
+
+    private static String firstFile(List<File> files, String dir) {
+        for (File f : files) if (f.getParentFile() != null && f.getParentFile().getAbsolutePath().equals(dir)) return Files.title(f);
+        return new File(dir).getName();
+    }
+
     private static List<File> freshFiles(Context c) {
         List<File> out = new ArrayList<>();
         for (String s : Files.SHELVES) collect(c, Ui.folder(s), out, 0);
         Collections.sort(out, new Comparator<File>() {
             @Override public int compare(File a, File b) {
-                long x = b.lastModified(), y = a.lastModified();
-                return x < y ? -1 : (x == y ? 0 : 1);
+                long x = b.lastModified() / 300000, y = a.lastModified() / 300000;
+                if (x != y) return x < y ? -1 : 1;
+                return a.getName().compareToIgnoreCase(b.getName());
             }
         });
         return out;
