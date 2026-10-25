@@ -139,6 +139,11 @@ public class ScoutActivity extends Activity {
         listAll(new File("/system/media"), 0);
         line("");
         copySystemPictures();
+        line("=== Права файлов (ls -l) ===");
+        sh("ls -l /data/local/assets/images");
+        sh("ls -l /system/media");
+        sh("ls -ld /data/local/assets /data/local/assets/images");
+        line("");
         line("=== Подсветка ===");
         lightInfo();
         line("");
@@ -241,6 +246,20 @@ public class ScoutActivity extends Activity {
             try { copy(f, dst); } catch (Throwable e) { line("не скопировал " + f + ": " + e.getMessage()); }
         }
         line("Системные картинки скопированы в " + to);
+    }
+
+    private void sh(String cmd) {
+        line("$ " + cmd);
+        try {
+            Process pr = Runtime.getRuntime().exec(new String[]{"sh", "-c", cmd + " 2>&1"});
+            BufferedReader r = new BufferedReader(new java.io.InputStreamReader(pr.getInputStream()));
+            String ln;
+            while ((ln = r.readLine()) != null) line("  " + ln);
+            r.close();
+            pr.waitFor();
+        } catch (Throwable e) {
+            line("  ошибка: " + e.getMessage());
+        }
     }
 
     private static String readSmall(File f) {
@@ -463,33 +482,57 @@ public class ScoutActivity extends Activity {
             }
             if (!backupDir.exists()) backupDir.mkdirs();
             String[] names = {"standby0.png", "standby1.png", "standby2.png", "standby3.png", "standby4.png"};
+            // Уже созданные нами файлы не считаем оригиналами — иначе «Вернуть» положит тест обратно
+            Set<String> ours = new HashSet<>();
+            if (createdList().exists()) {
+                BufferedReader r = new BufferedReader(new FileReader(createdList()));
+                String ln;
+                while ((ln = r.readLine()) != null) ours.add(ln.trim());
+                r.close();
+            }
             StringBuilder made = new StringBuilder();
             for (String n : names) {
                 File f = new File(dir, n);
                 if (f.exists()) {
                     File bak = new File(backupDir, java.net.URLEncoder.encode(f.getAbsolutePath(), "UTF-8"));
-                    if (!bak.exists()) copy(f, bak);
+                    if (!bak.exists() && !ours.contains(f.getAbsolutePath())) copy(f, bak);
                 } else {
                     made.append(f.getAbsolutePath()).append('\n');
                 }
-                Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-                Canvas c = new Canvas(bmp);
+                // Рисуем стоя (как видно на экране), потом поворачиваем на 90° против часовой —
+                // так лежат оригинальные картинки сна ONYX
+                int pw = Math.min(w, h), ph = Math.max(w, h);
+                Bitmap portrait = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888);
+                Canvas c = new Canvas(portrait);
                 c.drawColor(Color.WHITE);
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
                 p.setColor(Color.BLACK);
                 p.setTextAlign(Paint.Align.CENTER);
                 p.setTypeface(Typeface.DEFAULT_BOLD);
-                p.setTextSize(w / 7f);
-                c.drawText("ПОЛКА", w / 2f, h * 0.42f, p);
-                p.setTextSize(w / 14f);
-                c.drawText("сон — " + n, w / 2f, h * 0.55f, p);
+                p.setTextSize(pw / 6f);
+                c.drawText("ПОЛКА", pw / 2f, ph * 0.40f, p);
+                p.setTextSize(pw / 13f);
+                c.drawText("сон — " + n, pw / 2f, ph * 0.52f, p);
+                p.setTextSize(pw / 18f);
+                c.drawText("верх экрана здесь ↑", pw / 2f, ph * 0.08f, p);
+                Bitmap bmp = portrait;
+                if (w > h) {
+                    android.graphics.Matrix m = new android.graphics.Matrix();
+                    m.postRotate(-90);
+                    bmp = Bitmap.createBitmap(portrait, 0, 0, pw, ph, m, true);
+                }
                 OutputStream os = new FileOutputStream(f);
                 bmp.compress(Bitmap.CompressFormat.PNG, 95, os);
                 os.close();
+                // Наш файл по умолчанию читает только «Полка»; ONYX рисует сон от другого пользователя —
+                // без этого он видит пустоту и показывает белый экран
+                f.setReadable(true, false);
             }
             FileWriter fw = new FileWriter(createdList(), true);
             fw.write(made.toString());
             fw.close();
+            File[] all = dir.listFiles();
+            if (all != null) for (File x : all) x.setReadable(true, false);
             say("Положил картинки сна. Коротко нажми кнопку питания — что на экране сна? Сфотографируй.");
         } catch (Throwable e) {
             say("Тест сна не вышел: " + e.getMessage());
