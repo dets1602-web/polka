@@ -193,11 +193,12 @@ public class AppsActivity extends Activity {
                     Drawable d = ri.loadIcon(pm);
                     d.setColorFilter(new ColorMatrixColorFilter(gray));
                     icon.setImageDrawable(d);
-                    cell.addView(icon, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+                    cell.addView(icon, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
                     TextView label = Ui.text(this, ri.loadLabel(pm).toString(), 14, true, Ui.INK);
                     label.setGravity(Gravity.CENTER);
-                    label.setMaxLines(2);
-                    label.setPadding(Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4), 0);
+                    label.setSingleLine(true);
+                    label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    label.setPadding(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), 0);
                     cell.addView(label);
                     cell.setOnClickListener(new View.OnClickListener() {
                         @Override public void onClick(View v) { launch(ri); }

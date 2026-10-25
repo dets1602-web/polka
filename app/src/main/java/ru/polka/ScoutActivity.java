@@ -411,6 +411,10 @@ public class ScoutActivity extends Activity {
                 }
             }
         }
+        box.addView(text("Интернет:", 20, true));
+        box.addView(button("Проверка связи (GitHub, Яндекс)", new View.OnClickListener() {
+            @Override public void onClick(View v) { netCheck(); }
+        }));
         box.addView(text("Картинка сна:", 20, true));
         box.addView(button("Тест сна (положить standby)", new View.OnClickListener() {
             @Override public void onClick(View v) { testStandby(); }
@@ -461,6 +465,24 @@ public class ScoutActivity extends Activity {
         } catch (Throwable e) {
             say("№" + num + " не вышло: " + e.getMessage());
         }
+    }
+
+    private void netCheck() {
+        say("Проверяю связь… до минуты.");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String[] urls = {
+                        "https://github.com",
+                        "https://cloud-api.yandex.net/v1/disk",
+                        "https://oauth.yandex.ru",
+                        "https://ya.ru"
+                };
+                final StringBuilder r = new StringBuilder();
+                for (String u : urls) r.append(u.replace("https://", "")).append(" — ").append(Net.check(ScoutActivity.this, u)).append("\n");
+                r.insert(0, "Движок: " + Net.engine + "\n");
+                runOnUiThread(new Runnable() { @Override public void run() { say(r.toString()); } });
+            }
+        }).start();
     }
 
     private File createdList() { return new File(Environment.getExternalStorageDirectory(), "razvedchik_created.txt"); }

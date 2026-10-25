@@ -61,10 +61,37 @@ final class Net {
         }
         TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         tmf.init(ks);
-        SSLContext ctx = SSLContext.getInstance("TLS");
+        SSLContext ctx;
+        try {
+            // Conscrypt — свой движок шифрования внутри «Полки», с современными алгоритмами
+            ctx = SSLContext.getInstance("TLS", org.conscrypt.Conscrypt.newProvider());
+            engine = "Conscrypt";
+        } catch (Throwable e) {
+            ctx = SSLContext.getInstance("TLS");
+            engine = "системный (" + e.getClass().getSimpleName() + ")";
+        }
         ctx.init(null, tmf.getTrustManagers(), null);
         factory = new Tls12(ctx.getSocketFactory());
         return factory;
+    }
+
+    /** Каким движком шифруем — для отчёта. */
+    static String engine = "?";
+
+    /** Проверка связи: код ответа сервера или текст ошибки. */
+    static String check(Context c, String url) {
+        try {
+            HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
+            if (con instanceof HttpsURLConnection) ((HttpsURLConnection) con).setSSLSocketFactory(factory(c));
+            con.setInstanceFollowRedirects(false);
+            con.setConnectTimeout(15000);
+            con.setReadTimeout(15000);
+            int code = con.getResponseCode();
+            con.disconnect();
+            return "ок (" + code + ")";
+        } catch (Throwable e) {
+            return "нет: " + e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
     }
 
     /** Открывает адрес, сам проходит переадресации (GitHub отдаёт файл с другого сервера). */
@@ -127,7 +154,15 @@ final class Net {
 
         @Override public String[] getDefaultCipherSuites() { return d.getDefaultCipherSuites(); }
         @Override public String[] getSupportedCipherSuites() { return d.getSupportedCipherSuites(); }
-        @Override public Socket createSocket(Socket s, String host, int port, boolean autoClose) throws java.io.IOException { return fix(d.createSocket(s, host, port, autoClose)); }
+        @Override public Socket createSocket(Socket s, String host, int port, boolean autoClose) throws java.io.IOException {
+            Socket r = fix(d.createSocket(s, host, port, autoClose));
+            // Имя сайта в «рукопожатии» (SNI) — без него GitHub и Яндекс не знают, какой сертификат отдать
+            try {
+                if (r instanceof SSLSocket && org.conscrypt.Conscrypt.isConscrypt((SSLSocket) r))
+                    org.conscrypt.Conscrypt.setHostname((SSLSocket) r, host);
+            } catch (Throwable ignored) {}
+            return r;
+        }
         @Override public Socket createSocket(String host, int port) throws java.io.IOException { return fix(d.createSocket(host, port)); }
         @Override public Socket createSocket(String host, int port, InetAddress lh, int lp) throws java.io.IOException { return fix(d.createSocket(host, port, lh, lp)); }
         @Override public Socket createSocket(InetAddress h, int port) throws java.io.IOException { return fix(d.createSocket(h, port)); }

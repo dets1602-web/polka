@@ -22,12 +22,19 @@ android {
         minSdk = 17
         // 22 — чтобы на Android 6 доступ к памяти давался сразу при установке, без запросов
         targetSdk = 22
-        versionCode = 11
-        versionName = "0.11"
+        versionCode = 12
+        versionName = "0.12"
+        // Процессор книги — ARMv7; лишние варианты библиотеки шифрования не тащим
+        ndk { abiFilters += listOf("armeabi-v7a") }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
     lint { abortOnError = false; checkReleaseBuilds = false }
+}
+
+dependencies {
+    // Современное шифрование (TLS 1.2/1.3, AES-GCM): в Android 4.2 его нет, а GitHub и Яндекс без него не пускают
+    implementation("org.conscrypt:conscrypt-android:2.5.2")
 }
