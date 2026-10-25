@@ -106,10 +106,46 @@ public class AppsActivity extends Activity {
         }
     }
 
+    private boolean busy;
+
+    /** Сначала качаем свежую «Полку» с GitHub по Wi-Fi; не вышло — ставим то, что лежит в Download. */
     private void installUpdate() {
+        if (busy) return;
+        busy = true;
+        update.setText("Скачиваю «Полку» по Wi-Fi…");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String err = null;
+                try {
+                    Net.download(AppsActivity.this, Net.UPDATE_URL, updateFile());
+                } catch (Throwable e) {
+                    err = e.getClass().getSimpleName() + ": " + e.getMessage();
+                }
+                final String error = err;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        busy = false;
+                        updateLabel();
+                        afterDownload(error);
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void afterDownload(String error) {
         java.io.File f = updateFile();
-        if (!f.exists()) {
-            Toast.makeText(this, "Нет файла Download/Polka.apk", Toast.LENGTH_LONG).show();
+        android.content.pm.PackageInfo pi = f.exists() ? getPackageManager().getPackageArchiveInfo(f.getAbsolutePath(), 0) : null;
+        boolean newer = pi != null && pi.versionCode > installedCode();
+        if (error != null) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("По Wi-Fi не скачалось")
+                    .setMessage(error + (newer ? "\n\nВ Download есть «Полка» " + pi.versionName + " — ставлю её." : "\n\nСфотографируй и пришли."))
+                    .setPositiveButton("OK", null)
+                    .show();
+            if (!newer) return;
+        } else if (!newer) {
+            Toast.makeText(this, "Скачал. Новее нет — у тебя " + installedName(), Toast.LENGTH_LONG).show();
             return;
         }
         Intent i = new Intent(Intent.ACTION_VIEW);
