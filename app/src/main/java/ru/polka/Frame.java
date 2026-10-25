@@ -88,15 +88,50 @@ final class Frame {
         try {
             if (Yandex.loggedIn(c)) {
                 try { Sync.run(c, quiet); } catch (Throwable e) { Crash.note(c, "frame sync", e); }
-                if (newPhoto) {
-                    try { fetchPhoto(c); } catch (Throwable e) { note(c, "Фото: " + e.getMessage()); Crash.note(c, "frame photo", e); }
-                }
             }
+            if (newPhoto) nextArt(c);
             try { fetchWeather(c); } catch (Throwable e) { Crash.note(c, "frame weather", e); }
         } finally {
             if (!wifiWas) Sync.wifiOff(c);
         }
         draw(c);
+    }
+
+    /** Свои картинки, встроенные в «Полку» (assets/frame): горы, небо, лес, лабиринт, карта, узоры… */
+    private static String[] arts(Context c) {
+        try {
+            String[] a = c.getAssets().list("frame");
+            return a == null ? new String[0] : a;
+        } catch (Throwable e) {
+            return new String[0];
+        }
+    }
+
+    /** Следующая картинка — случайная, но не та же, что сейчас. */
+    static void nextArt(Context c) {
+        String[] a = arts(c);
+        if (a.length == 0) return;
+        String cur = Ui.prefs(c).getString("frame_art", "");
+        Random rnd = new Random();
+        String pick = a[rnd.nextInt(a.length)];
+        for (int i = 0; i < 5 && a.length > 1 && pick.equals(cur); i++) pick = a[rnd.nextInt(a.length)];
+        Ui.prefs(c).edit().putString("frame_art", pick).apply();
+        note(c, "Картинка " + pick.replace(".png", "") + " из " + a.length + ".");
+    }
+
+    private static Bitmap loadArt(Context c) {
+        String name = Ui.prefs(c).getString("frame_art", null);
+        if (name == null) { nextArt(c); name = Ui.prefs(c).getString("frame_art", null); }
+        if (name == null) return null;
+        try {
+            java.io.InputStream in = c.getAssets().open("frame/" + name);
+            Bitmap b = BitmapFactory.decodeStream(in);
+            in.close();
+            return b;
+        } catch (Throwable e) {
+            Ui.prefs(c).edit().remove("frame_art").apply();
+            return null;
+        }
     }
 
     private static void note(Context c, String s) { Ui.prefs(c).edit().putString("frame_note", s).apply(); }
@@ -137,7 +172,7 @@ final class Frame {
         Canvas cv = new Canvas(b);
         cv.drawColor(Color.WHITE);
         Date now = new Date();
-        Bitmap photo = loadPhoto(c, W, H - STRIP);
+        Bitmap photo = loadArt(c);
         if (photo != null) {
             Paint gray = new Paint(Paint.FILTER_BITMAP_FLAG);
             ColorMatrix cm = new ColorMatrix();

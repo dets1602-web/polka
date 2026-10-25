@@ -47,12 +47,12 @@ public class FrameActivity extends Activity {
         String note = Ui.prefs(this).getString("frame_note", "");
         status.setText(on
                 ? "Рамка включена" + (when != null ? " · обновлена " + when : "") + ". " + note
-                + "\nРаз в час — новое фото и погода. Покажется, когда книга уснёт (иногда со второго раза)."
-                : "Сейчас во сне — картинки ONYX. Включите, и книга будет показывать фото с Диска, дату и погоду.");
+                + "\nРаз в час — новая картинка и погода. Покажется, когда книга уснёт (иногда со второго раза)."
+                : "Сейчас во сне — картинки ONYX. Включите, и книга будет показывать картинки «Полки», дату и погоду.");
         LinearLayout row = Ui.row(this);
         if (on) {
-            row.addView(Ui.button(this, "Новое фото", true, new View.OnClickListener() {
-                @Override public void onClick(View v) { refresh(); }
+            row.addView(Ui.button(this, "Другая картинка", true, new View.OnClickListener() {
+                @Override public void onClick(View v) { Frame.nextArt(FrameActivity.this); Frame.draw(FrameActivity.this); render(); }
             }), Ui.margins(this, Ui.weight(1), 0, 0, 6, 0));
             row.addView(Ui.button(this, "Выключить", false, new View.OnClickListener() {
                 @Override public void onClick(View v) { Frame.disable(FrameActivity.this); render(); }
@@ -71,7 +71,7 @@ public class FrameActivity extends Activity {
     private void refresh() {
         if (busy) return;
         busy = true;
-        status.setText("Беру новое фото и погоду… до минуты.");
+        status.setText("Беру погоду и новую картинку… до минуты.");
         new Thread(new Runnable() {
             @Override public void run() {
                 try { Frame.refresh(FrameActivity.this, true); } catch (Throwable e) { Crash.note(FrameActivity.this, "frame refresh", e); }
