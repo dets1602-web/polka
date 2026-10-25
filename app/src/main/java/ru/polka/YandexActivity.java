@@ -67,6 +67,8 @@ public class YandexActivity extends Activity {
             body.addView(field, Ui.margins(this, Ui.matchWrap(), 0, 8, 0, 8));
             body.addView(Ui.button(this, "Сохранить секрет", true, new View.OnClickListener() {
                 @Override public void onClick(View v) {
+                    android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                    if (im != null) im.hideSoftInputFromWindow(field.getWindowToken(), 0);
                     if (Yandex.setSecret(YandexActivity.this, field.getText().toString())) { say("Секрет сохранён."); render(); }
                     else say("Не похоже на секрет: нужно ровно 32 знака (цифры и буквы a–f).");
                 }

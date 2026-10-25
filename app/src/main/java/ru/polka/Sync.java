@@ -61,13 +61,32 @@ final class Sync {
                 r.note = "На Диске нет папки «Полка». Создайте её в корне Диска, внутри — «Книги», «Схемы», «Документация».";
                 return r;
             }
-            for (String shelf : Files.SHELVES) {
-                log.say("Смотрю «" + shelf + "»…");
-                JSONArray items = Yandex.list(c, ROOT + "/" + shelf);
-                if (items == null) continue;
-                walk(c, items, Ui.folder(shelf), r, log, 0);
+            // Что лежит в «Полке» на Диске: папки разносим по полкам (регистр букв не важен),
+            // незнакомые папки и файлы прямо в «Полке» — на полку «Книги», чтобы ничего не потерялось
+            StringBuilder seen = new StringBuilder();
+            JSONArray loose = new JSONArray();
+            for (int i = 0; i < top.length(); i++) {
+                JSONObject it = top.getJSONObject(i);
+                String name = it.optString("name");
+                if (name.startsWith(".")) continue;
+                if (!"dir".equals(it.optString("type"))) { loose.put(it); continue; }
+                String shelf = shelfFor(name);
+                File dest = shelf != null ? Ui.folder(shelf) : new File(Ui.folder("Книги"), name);
+                seen.append(seen.length() == 0 ? "" : ", ").append(name);
+                log.say("Смотрю «" + name + "»…");
+                JSONArray items = Yandex.list(c, it.optString("path"));
+                if (items != null) walk(c, items, dest, r, log, 0);
             }
-            r.note = r.added + r.updated == 0 ? "Нового нет." : "Новых: " + r.added + (r.updated > 0 ? ", обновлено: " + r.updated : "");
+            if (loose.length() > 0) walk(c, loose, Ui.folder("Книги"), r, log, 0);
+
+            int total = r.added + r.updated + r.skipped + r.errors;
+            if (r.added + r.updated > 0) {
+                r.note = "Новых: " + r.added + (r.updated > 0 ? ", обновлено: " + r.updated : "") + ".";
+            } else if (total == 0) {
+                r.note = "В «Полке» на Диске нет файлов." + (seen.length() > 0 ? " Папки: " + seen + "." : "");
+            } else {
+                r.note = "Нового нет: все " + total + " файл(ов) уже на книге.";
+            }
             if (r.errors > 0) r.note += " Не скачалось: " + r.errors + ".";
         } catch (Throwable e) {
             r.note = "Ошибка: " + e.getMessage();
@@ -78,6 +97,15 @@ final class Sync {
             Ui.prefs(c).edit().putString("sync_when", when).putString("sync_note", r.note).apply();
         }
         return r;
+    }
+
+    /** Папка на Диске → полка книги. null — незнакомое имя. */
+    private static String shelfFor(String name) {
+        String n = name.trim().toLowerCase(new Locale("ru"));
+        if (n.startsWith("книг")) return "Книги";
+        if (n.startsWith("схем")) return "Схемы";
+        if (n.startsWith("докум") || n.startsWith("инструк")) return "Документация";
+        return null;
     }
 
     private static void walk(Context c, JSONArray items, File dir, Result r, Log log, int depth) throws Exception {
