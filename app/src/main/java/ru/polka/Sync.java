@@ -30,46 +30,41 @@ final class Sync {
         String note = "";
     }
 
-    /** Включает Wi-Fi, если он выключен, и ждёт подключения. Возвращает, был ли он включён до нас. */
-    static boolean wifiOn(Context c, Log log) {
-        boolean was = true; // если что-то пойдёт не так — Wi-Fi потом не трогаем
+    /** Есть ли сейчас интернет. Wi-Fi «Полка» сама не включает — это делает человек. */
+    static boolean online(Context c) {
         try {
-            WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            was = wm == null || wm.isWifiEnabled();
-            if (!was) {
-                log.say("Включаю Wi-Fi…");
-                if (!wm.setWifiEnabled(true)) {
-                    log.say("Wi-Fi не включился — включите вручную.");
-                    return true;
-                }
-            }
             ConnectivityManager cm = (ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
-            for (int i = 0; i < 45; i++) {
-                NetworkInfo ni = cm == null ? null : cm.getActiveNetworkInfo();
-                if (ni != null && ni.isConnected()) return was;
-                if (i == 5) log.say("Жду подключения к Wi-Fi…");
-                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-            }
-            log.say("Wi-Fi не подключился за 45 секунд.");
+            NetworkInfo ni = cm == null ? null : cm.getActiveNetworkInfo();
+            return ni != null && ni.isConnected();
         } catch (Throwable e) {
-            Crash.note(c, "wifiOn", e);
-            log.say("Не смог включить Wi-Fi: " + e.getMessage());
+            return false;
         }
-        return was;
     }
 
-    static void wifiOff(Context c) {
+    /** Раньше включал Wi-Fi сам; теперь только ждёт до 10 секунд, если Wi-Fi включён и ещё подключается. */
+    static boolean wifiOn(Context c, Log log) {
         try {
             WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            if (wm != null) wm.setWifiEnabled(false);
+            if (wm != null && wm.isWifiEnabled()) {
+                for (int i = 0; i < 10 && !online(c); i++) {
+                    try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+                }
+            }
         } catch (Throwable e) {
-            Crash.note(c, "wifiOff", e);
+            Crash.note(c, "wifi check", e);
         }
+        return true; // Wi-Fi не трогали — и выключать его не надо
     }
+
+    static void wifiOff(Context c) { /* Wi-Fi включает и выключает человек */ }
 
     static Result run(Context c, Log log) {
         Result r = new Result();
         boolean wifiWas = wifiOn(c, log);
+        if (!online(c)) {
+            r.note = "Wi-Fi выключен — включите его и нажмите ещё раз.";
+            return r;
+        }
         try {
             JSONArray top = Yandex.list(c, ROOT);
             if (top == null) {

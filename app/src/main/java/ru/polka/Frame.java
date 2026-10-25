@@ -86,6 +86,12 @@ final class Frame {
         Sync.Log quiet = new Sync.Log() { @Override public void say(String s) {} };
         boolean wifiWas = Sync.wifiOn(c, quiet);
         try {
+            if (!Sync.online(c)) {
+                // без интернета — только новая картинка
+                if (newPhoto) nextArt(c);
+                draw(c);
+                return;
+            }
             if (Yandex.loggedIn(c)) {
                 try { Sync.run(c, quiet); } catch (Throwable e) { Crash.note(c, "frame sync", e); }
             }
@@ -256,6 +262,8 @@ final class Frame {
         String upd = "обн. " + new SimpleDateFormat("HH:mm", RU).format(now);
         int bat = battery(c);
         if (bat >= 0) upd += " · " + bat + "%";
+        long wat = Ui.prefs(c).getLong("weather_at", 0);
+        if (w != null && wat > 0) upd += " · погода на " + new SimpleDateFormat("HH:mm", RU).format(new Date(wat));
         cv.drawText(upd, m, top + STRIP - 18, p);
     }
 
@@ -294,7 +302,7 @@ final class Frame {
     private static String[] weather(Context c) {
         String raw = Ui.prefs(c).getString("weather", null);
         long at = Ui.prefs(c).getLong("weather_at", 0);
-        if (raw == null || System.currentTimeMillis() - at > 12L * 3600 * 1000) return null;
+        if (raw == null || System.currentTimeMillis() - at > 24L * 3600 * 1000) return null;
         try {
             JSONObject j = new JSONObject(raw);
             JSONObject cur = j.getJSONObject("current_weather");

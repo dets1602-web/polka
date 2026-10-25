@@ -49,7 +49,7 @@ public class YandexActivity extends Activity {
                 @Override public void onClick(View v) { sync(); }
             }), Ui.margins(this, Ui.matchWrap(), 0, 20, 0, 10));
             body.addView(Ui.text(this, "Кладите файлы на Диск в папку «Полка»: внутри «Книги», «Схемы», «Документация». "
-                    + "С книги ничего не удаляется. Wi-Fi «Полка» включит сама и потом выключит.", 15, false, Ui.GREY));
+                    + "С книги ничего не удаляется. Перед загрузкой включите Wi-Fi.", 15, false, Ui.GREY));
             body.addView(Ui.button(this, "Выйти из Яндекса", false, new View.OnClickListener() {
                 @Override public void onClick(View v) { Yandex.logout(YandexActivity.this); render(); say(""); }
             }), Ui.margins(this, Ui.matchWrap(), 0, 20, 0, 0));
@@ -97,6 +97,7 @@ public class YandexActivity extends Activity {
             @Override public void run() {
                 boolean wifiWas = Sync.wifiOn(YandexActivity.this, new Sync.Log() { @Override public void say(String s) { YandexActivity.this.say(s); } });
                 try {
+                    if (!Sync.online(YandexActivity.this)) { say("Wi-Fi выключен — включите его и нажмите «Войти» ещё раз."); return; }
                     final Yandex.Code k = Yandex.requestCode(YandexActivity.this);
                     runOnUiThread(new Runnable() { @Override public void run() { showCode(k); } });
                     say("Жду, пока вы введёте код на телефоне…");
