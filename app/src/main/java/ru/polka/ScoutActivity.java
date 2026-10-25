@@ -138,6 +138,7 @@ public class ScoutActivity extends Activity {
         line("=== /system/media — все файлы ===");
         listAll(new File("/system/media"), 0);
         line("");
+        copySystemPictures();
         line("=== Подсветка ===");
         lightInfo();
         line("");
@@ -225,6 +226,21 @@ public class ScoutActivity extends Activity {
                 line(indent(depth) + f.getName() + "  " + f.length() + " байт" + dim + "  писать:" + yn(f.canWrite()));
             }
         }
+    }
+
+    /** Копирует системные картинки ONYX в память книги, чтобы их можно было посмотреть с компьютера. */
+    private void copySystemPictures() {
+        File to = new File(Environment.getExternalStorageDirectory(), "razvedchik_system");
+        File[] list = new File("/system/media").listFiles();
+        if (list == null) return;
+        if (!to.exists()) to.mkdirs();
+        for (File f : list) {
+            if (!IMG.matcher(f.getName()).find()) continue;
+            File dst = new File(to, f.getName());
+            if (dst.exists() && dst.length() == f.length()) continue;
+            try { copy(f, dst); } catch (Throwable e) { line("не скопировал " + f + ": " + e.getMessage()); }
+        }
+        line("Системные картинки скопированы в " + to);
     }
 
     private static String readSmall(File f) {
@@ -446,7 +462,7 @@ public class ScoutActivity extends Activity {
                 if (o.outWidth > 0) { w = o.outWidth; h = o.outHeight; }
             }
             if (!backupDir.exists()) backupDir.mkdirs();
-            String[] names = {"standby-1.png", "standby.png", "standby_1.png"};
+            String[] names = {"standby0.png", "standby1.png", "standby2.png", "standby3.png", "standby4.png"};
             StringBuilder made = new StringBuilder();
             for (String n : names) {
                 File f = new File(dir, n);

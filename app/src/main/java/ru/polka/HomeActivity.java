@@ -11,6 +11,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -23,6 +24,7 @@ public class HomeActivity extends Activity {
     private static final Locale RU = new Locale("ru");
     private TextView time, date, battery;
     private LinearLayout reading, tiles;
+    private TextView light;
 
     private final BroadcastReceiver tick = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) { updateClock(); }
@@ -64,6 +66,14 @@ public class HomeActivity extends Activity {
         bottom.addView(Ui.button(this, "Приложения", true, new View.OnClickListener() {
             @Override public void onClick(View v) { startActivity(new Intent(HomeActivity.this, AppsActivity.class)); }
         }), Ui.margins(this, Ui.weight(1), 0, 0, 6, 0));
+        light = Ui.button(this, "Свет", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                int pct = Light.next(Light.get());
+                if (!Light.set(pct)) Toast.makeText(HomeActivity.this, "Подсветка не отвечает", Toast.LENGTH_SHORT).show();
+                updateLight();
+            }
+        });
+        bottom.addView(light, Ui.margins(this, Ui.weight(1), 6, 0, 6, 0));
         bottom.addView(Ui.button(this, "Настройки", false, new View.OnClickListener() {
             @Override public void onClick(View v) { AppsActivity.openSystemSettings(HomeActivity.this); }
         }), Ui.margins(this, Ui.weight(1), 6, 0, 0, 0));
@@ -79,6 +89,13 @@ public class HomeActivity extends Activity {
         updateClock();
         updateReading();
         updateTiles();
+        updateLight();
+    }
+
+    private void updateLight() {
+        int pct = Light.get();
+        light.setText(Light.label(pct));
+        light.setVisibility(pct < 0 ? View.GONE : View.VISIBLE);
     }
 
     @Override
