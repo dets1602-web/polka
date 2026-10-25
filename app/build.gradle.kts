@@ -1,6 +1,15 @@
 plugins { id("com.android.application") }
 
 android {
+    signingConfigs {
+        getByName("debug") {
+            enableV1Signing = true
+            enableV2Signing = false
+            enableV3Signing = false
+            enableV4Signing = false
+        }
+    }
+
     namespace = "ru.polka"
     compileSdk = 30
     defaultConfig {
